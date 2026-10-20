@@ -258,8 +258,11 @@
     const i = s.toAct, p = s.seats[i];
     let type = a.type;
     if (type === "allin") {
-      const to = p.bet + p.stack;
-      type = to <= s.currentBet ? "call" : "raise";
+      // "All in" = as much as the rules allow: the whole stack in no limit, capped
+      // at the pot-limit / fixed-limit maximum otherwise.
+      let to = p.bet + p.stack;
+      if (to <= s.currentBet || !L.canRaise) type = "call";
+      else { type = "raise"; to = Math.min(to, L.maxTo); }
       a = { type, to };
     }
     if (type === "check" && !L.canCheck) illegal("Can't check facing a bet");
@@ -347,6 +350,9 @@
       prev = lv;
       if (!amount) continue;
       const last = pots[pots.length - 1];
+      // Chips from folded players above every live player's total (e.g. a folded
+      // big-blind ante) belong to the last real pot, not a pot nobody can win.
+      if (!eligible.length && last) { last.amount += amount; continue; }
       if (last && last.eligible.join() === eligible.join()) last.amount += amount;
       else pots.push({ amount, eligible });
     }
@@ -392,7 +398,8 @@
     // Busted players: in a tournament they finish in order (ties share the better place by chips put in).
     const busted = s.seats.filter((p) => !p.out && p.stack === 0);
     if (s.cfg.format === "tourney" && busted.length) {
-      busted.sort((a, b) => b.total - a.total);
+      // Busted in the same hand: whoever started the hand with fewer chips finishes lower (TDA).
+      busted.sort((a, b) => a.total - b.total);
       for (const p of busted) { p.out = true; p.place = s.nextPlace--; }
       const left = s.seats.filter((p) => !p.out);
       if (left.length === 1) { s.over = true; s.winner = left[0].i; left[0].place = 1; }

@@ -254,6 +254,49 @@ function rig(s, holes, board) {
   eq(s.seats[s.winner].stack, 900, "winner holds every chip");
 }
 
+// ------------------------------------------------ two bust in one hand: bigger starting stack places higher
+{
+  let s = game(4, { format: "tourney", startStack: 1000 });
+  s.seats[0].stack = 900; s.seats[1].stack = 300; s.seats[2].stack = 2000; s.seats[3].stack = 2000;
+  s.button = 3; // so seat 0 is the small blind next hand
+  s = rig(s, [C("7c 2d"), C("8c 3d"), C("Ac Ad"), C("Kc Kd")], C("As Ah 9s 5h 4c"));
+  let g = 0;
+  while (s.street !== "done" && g++ < 20) {
+    const L = E.legal(s);
+    s = A(s, s.toAct <= 1 ? { type: "allin" } : L.canCheck ? { type: "check" } : { type: "call" });
+  }
+  eq([s.seats[0].out, s.seats[1].out], [true, true], "both short stacks bust");
+  eq(s.seats[0].place, 3, "same-hand busts: bigger starting stack (900) finishes 3rd");
+  eq(s.seats[1].place, 4, "same-hand busts: smaller starting stack (300) finishes 4th");
+}
+
+// ------------------------------------------------ "all in" in pot limit is capped at the pot
+{
+  let s = game(3, { betting: "pl", sb: 1, bb: 2, startStack: 1000 });
+  s = A(s, { type: "deal" });
+  const before = E.legal(s).maxTo;
+  s = A(s, { type: "allin" });
+  eq(s.currentBet, before, "pot-limit all in = pot-size raise when the stack is bigger");
+}
+
+// ------------------------------------------------ folded chips above every live player go to a real pot
+{
+  let s = game(3, { ante: 20, anteType: "bb", startStack: 1000 });
+  s.seats.forEach((p) => { p.stack = 1000; });
+  s = A(s, { type: "deal" });
+  const bb = s.bbSeat;
+  // the other two have 30 behind: shove, call, and the big blind (40 in with its ante) folds
+  s.seats.forEach((p) => { if (p.i !== bb) { p.stack = 30 - p.bet; } });
+  let g = 0;
+  while (s.street !== "done" && g++ < 30) {
+    const L = E.legal(s);
+    s = A(s, s.toAct === bb ? (L.canCheck ? { type: "check" } : { type: "fold" }) : { type: "allin" });
+  }
+  eq(s.seats[bb].folded, true, "big blind folded");
+  ok(s.result.pots.every((p) => p.eligible.length > 0), "no pot without an eligible player: " + JSON.stringify(s.result.pots.map((p) => p.eligible)));
+  eq(s.result.pots.reduce((a, p) => a + p.amount, 0), 100, "all 100 chips are in winnable pots");
+}
+
 // ------------------------------------------------ random play: chips conserved, every hand ends
 {
   const rand = P.rng32(99);

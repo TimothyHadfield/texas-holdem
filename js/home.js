@@ -21,15 +21,19 @@
     };
   }
 
+  /** The saved home-game state (made once, shared with the background timer). */
+  function ensureH() {
+    if (!H && UI.Store.data) H = UI.Store.data.home = Object.assign(defaults(), UI.Store.data.home || {});
+    return H;
+  }
+
   function init(container) {
     el = container;
-    H = UI.Store.data.home = Object.assign(defaults(), UI.Store.data.home || {});
+    ensureH();
     el.addEventListener("click", onClick);
     el.addEventListener("input", onInput);
     el.addEventListener("change", onChange);
     render();
-    clearInterval(tick);
-    tick = setInterval(update, 250);
   }
   const save = () => UI.Store.save();
 
@@ -78,7 +82,11 @@
   }
 
   function update() {
-    if (!el || UI.Store.data.tab !== "home") return;
+    // The clock runs whatever tab is showing: levels roll over and beep here;
+    // only the screen updates wait until the Home tab is open.
+    if (!UI.Store.data || !(H || (UI.Store.data.home && UI.Store.data.home.running))) return;
+    ensureH();
+    const shown = !!el && UI.Store.data.tab === "home";
     // roll levels forward if time ran out (even while the phone was locked)
     if (H.running && Date.now() >= H.endAt) {
       const L = levels();
@@ -89,9 +97,10 @@
       }
       beep();
       save();
-      render();
+      if (shown) render();
       return;
     }
+    if (!shown) return;
     const c = el.querySelector("#tClock");
     if (!c) return;
     const ms = remaining();
@@ -153,17 +162,19 @@
     const money = (c) => UI.money(c / 100);
     if (H.mode === "cash") {
       const r = HC.settle(H.players, +H.buyIn || 0, +H.chipsPerBuyIn || 1);
+      const uncounted = r.status === "uncounted";
       const rows = H.players.map((p, i) => `<tr><td>${esc(p.name)}</td>
         <td><div class="stepper"><button data-bi="${i}" data-d="-1">−</button><b>${p.buyIns}</b><button data-bi="${i}" data-d="1">+</button></div></td>
         <td><input type="number" inputmode="numeric" value="${esc(p.chips)}" data-p="${i}" data-k="chips"></td>
-        <td class="${r.rows[i].net > 0 ? "good" : r.rows[i].net < 0 ? "bad" : ""}" style="text-align:right;font-weight:800">${r.rows[i].net > 0 ? "+" : ""}${money(r.rows[i].net)}</td></tr>`).join("");
-      const tr = r.transfers.map((t) => `<div class="transfer">${esc(H.players[t.from].name)} <span class="muted">pays</span> ${esc(H.players[t.to].name)} <span class="spacer"></span><b>${money(t.cents)}</b></div>`).join("") || `<div class="transfer muted">Everyone is even.</div>`;
-      const off = r.chipsCounted - r.chipsExpected;
+        <td class="${uncounted ? "muted" : r.rows[i].net > 0 ? "good" : r.rows[i].net < 0 ? "bad" : ""}" style="text-align:right;font-weight:800">${uncounted ? "—" : (r.rows[i].net > 0 ? "+" : "") + money(r.rows[i].net)}</td></tr>`).join("");
+      const tr = uncounted ? `<div class="transfer muted">${esc(HC.settleNote(r))}</div>`
+        : r.transfers.map((t) => `<div class="transfer">${esc(H.players[t.from].name)} <span class="muted">pays</span> ${esc(H.players[t.to].name)} <span class="spacer"></span><b>${money(t.cents)}</b></div>`).join("") || `<div class="transfer muted">Everyone is even.</div>`;
+      const off = r.status === "off" ? r.chipsCounted - r.chipsExpected : 0;
       return `<div class="scroll" style="flex:1"><div style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">${mode}
         <span class="label">Buy-in $</span><input type="number" inputmode="decimal" style="width:70px" value="${esc(H.buyIn)}" data-f="buyIn">
         <span class="label">Chips</span><input type="number" inputmode="numeric" style="width:80px" value="${esc(H.chipsPerBuyIn)}" data-f="chipsPerBuyIn">${qm("settle")}</div>
         <table class="settle-tbl"><tr><th style="padding-left:14px">Player</th><th>Buy-ins</th><th>Chips</th><th style="text-align:right;padding-right:14px">Net</th></tr>${rows}</table>
-        ${off ? `<div class="transfer ${off > 0 ? "warm" : "bad"}" style="font-size:13px">Chips counted ${fmt(r.chipsCounted)} vs ${fmt(r.chipsExpected)} bought — the difference is shared by chip value.</div>` : ""}
+        ${off ? `<div class="transfer ${off > 0 ? "warm" : "bad"}" style="font-size:13px">${esc(HC.settleNote(r))}</div>` : ""}
         <div class="label" style="padding:12px 14px 4px">Payments</div>${tr}</div>`;
     }
     const pool = H.players.reduce((a, p) => a + (+p.buyIns || 0), 0) * (+H.buyIn || 0);
@@ -202,7 +213,10 @@
       save(); render(); return;
     }
     if (b.dataset.min) {
-      H.minutes = Math.max(1, Math.min(90, H.minutes + +b.dataset.min * (H.minutes >= 10 ? 5 : 1)));
+      // 1-minute steps up to 10, then 5-minute steps (… 9, 10, 15, 20 …), both ways
+      const m = H.minutes;
+      const next = +b.dataset.min > 0 ? (m < 10 ? m + 1 : Math.floor(m / 5) * 5 + 5) : (m <= 10 ? m - 1 : Math.ceil(m / 5) * 5 - 5);
+      H.minutes = Math.max(1, Math.min(90, next));
       if (!H.running) H.remaining = H.minutes * 60000;
       save(); render(); return;
     }
@@ -232,6 +246,10 @@
     }
     if (t.dataset.p !== undefined || t.dataset.f) render();
   }
+
+  // one clock for the whole page, started at load (not when the Home tab first opens)
+  clearInterval(tick);
+  tick = setInterval(update, 250);
 
   root.HomeTab = { init, render };
 })(this);

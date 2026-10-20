@@ -1,5 +1,6 @@
 /* homecalc.js — maths for the home-game companion (pure, tested in Node).
  *   settle(players, perBuyIn, chipsPerBuyIn) -> cash-game results + transfers
+ *   settleNote(result)                       -> plain note when the chip count is off
  *   transfers(nets)                          -> fewest payments to square up
  *   icm(stacks, prizes)                      -> fair deal (Malmuth–Harville)
  *   chipValue(counts, denoms)                -> total of a stack by colour
@@ -49,7 +50,17 @@
       rows: players.map((p, i) => ({ paid: paidC[i], cashOut: cash[i], net: nets[i] })),
       transfers: transfers(nets), perChip: totalChips ? moneyC / 100 / totalChips : 0,
       chipsExpected: expected, chipsCounted: totalChips,
+      // "uncounted": no chips entered yet (nothing to settle); "off": count differs from buy-ins
+      status: totalChips === 0 && expected > 0 ? "uncounted" : totalChips !== expected ? "off" : "ok",
     };
+  }
+
+  const n0 = (x) => Math.round(x).toLocaleString("en-US");
+  /** Plain note about the chip count for the settle screen ("" when it matches). */
+  function settleNote(r) {
+    if (r.status === "uncounted") return `Chips counted: ${n0(r.chipsCounted)} of ${n0(r.chipsExpected)} — finish counting`;
+    if (r.status === "off") return `Chips counted ${n0(r.chipsCounted)} vs ${n0(r.chipsExpected)} bought — the difference is shared by chip value.`;
+    return "";
   }
 
   /**
@@ -94,7 +105,7 @@
     "4": [40, 30, 20, 10],
   };
 
-  const api = { transfers, settle, icm, chipValue, PAYOUTS };
+  const api = { transfers, settle, settleNote, icm, chipValue, PAYOUTS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HomeCalc = api;
 })(typeof self !== "undefined" ? self : this);

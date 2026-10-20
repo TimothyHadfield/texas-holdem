@@ -259,28 +259,31 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .lvl-grid button.on { border-color: var(--accent); color: var(--text); background: rgba(110,168,254,.12); }
 
 /* ================================================================ ODDS */
-.odds-wrap { flex: 1; display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+.odds-wrap { flex: 1; display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0, 1fr); min-height: 0; min-width: 0; }
 .odds-top { padding: 10px 14px 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; border-bottom: 1px solid var(--line); }
 .bignum { font-size: 40px; font-weight: 850; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .bignum small { font-size: 16px; font-weight: 700; color: var(--muted); margin-left: 4px; }
 .subnums { display: flex; gap: 12px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .subnums b { color: var(--text); font-variant-numeric: tabular-nums; }
-.slots { padding: 8px 14px; display: grid; gap: 6px; }
-.slot-row { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.slots { padding: 6px 14px; display: grid; gap: 4px; }
+.slot-row { display: flex; align-items: center; gap: 8px; min-height: 48px; min-width: 0; }
 .slot-row .label { width: 54px; flex: none; }
 .slot-row .cards { display: flex; gap: 4px; flex-wrap: nowrap; }
 .slot-row .cd { --w: 33px; cursor: pointer; }
 .slot-row .cd.sel { outline: 2px solid var(--accent); outline-offset: 2px; }
 .slot-row .cd.slot.sel { border-color: var(--accent); background: rgba(110,168,254,.12); }
-.slot-row .tail { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-.picker { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; padding: 6px 10px; align-content: start; }
+.slot-row .tail { margin-left: auto; display: flex; gap: 6px; align-items: center; min-width: 0; }
+/* seen cards fan out (overlap) when there are many, so the row never gets wider than the screen */
+.slot-row .seen { display: flex; min-width: 0; flex: 0 1 auto; padding-right: 2px; }
+.slot-row .seen > span { flex: 0 1 26px; min-width: 9px; }
+.picker { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; padding: 4px 10px; align-content: start; }
 .pk { aspect-ratio: .74; border-radius: 5px; border: 1px solid #d8d1c2; background: #f6f2e9; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; line-height: 1; padding: 0; max-height: 52px; }
 .pk i { font-style: normal; font-size: 12px; }
 .pk.s0 { color: var(--c-club); } .pk.s1 { color: var(--c-diamond); } .pk.s2 { color: var(--c-heart); } .pk.s3 { color: var(--c-spade); }
 .pk.used { opacity: .18; }
 .pk:active { transform: scale(.94); }
-.odds-extra { padding: 6px 14px 10px; display: grid; gap: 8px; align-content: start; }
-.potodds { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.odds-extra { padding: 4px 14px 6px; display: grid; gap: 4px; align-content: start; flex: 1; min-height: 0; overflow-y: auto; }
+.potodds { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
 .potodds input { width: 80px; }
 .verdict { font-weight: 750; }
 .outs-line { font-size: 13px; color: var(--muted); }

@@ -16,7 +16,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Computers Easy / Medium / Hard, hint, measured bb/100 | Done (see Decisions) |
 | Study: hand list, everyone's cards, who-was-ahead graph, EV per decision, luck | Done |
 | Home game: blind timer, chips, cash settle-up, tournament payouts + ICM deal | Done (home.test 14) |
-| Online seats | In progress (shared module at `../_online`, gameId `holdem`) |
+| Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)
 - "Make sure to get everything right like rules and artwork and specific numbers of cards, routes, details, etc."
@@ -26,6 +26,9 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - `fill:` in phone-view doesn't fire on number inputs; real typing works (checked by hand). Use `--eval` to set values.
 - Port 8231 may be used by other game builders; serve on 8477.
 - The AA vs KK "81.9%" is the average over suits; the no-shared-suit case is 81.06%. Tests check all three.
+- `js/online.js` must stay an unchanged copy of `../_online/online.js`; re-copy it when that one changes. Online state must never carry `cfg.seed` in a view (it would reveal the deck); `publicView` deletes it and a test checks.
+- Online two-browser check: `node tools/two-browsers.mjs <url> <outdir>` (Playwright WebKit from ~/.claude/tools, two iPhone pages, creates a room, plays 3 hands, leaves).
+- In an online game, if a player who left (now a computer seat) is the only one allowed to deal, the next hand deals ~1 s after showdown.
 - Measuring strength takes minutes: `node tools/measure.js` (see the file header for options).
 
 ## Decisions
@@ -37,7 +40,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 ## NOT verified
 - On a real iPhone (only WebKit at 393 px via phone-view).
 - Timer beep/vibrate on iOS (vibrate is not supported on iOS Safari; beep needs a tap first).
-- Online play with real people on two phones.
+- Online play with real people on two real phones (only two headless WebKit pages against the live site + real Firebase), host hand-over when the creator drops, and reload mid-game rejoin.
+- Online hands are not saved to Study (other players' cards are hidden, so the EV maths would be wrong).
 
 ## Rejected / parked
 - ~~Outs quiz, push/fold chart~~ — parked, new screens are Tim's call (docs/ideas.md).

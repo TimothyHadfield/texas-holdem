@@ -13,3 +13,9 @@
 - **Built:** engine fixes (each new test seen failing on the old engine first), table display fixes in play.js/study.js/style.css, Odds/Home fixes by a builder in worktree `texas-holdem-qafix`.
 - **Verified:** `npm test` (76/14/114/36/55); phone-view 393 px + laptop of a showdown, a tournament win and 8 computers, zero console errors, no overflow.
 - **Note:** progress.md was once edited with sed during the first build (rule slip; content checked, no harm).
+
+## 2026-10-20 — visual design pass (v1.2.1)
+- **Asked (Tim, via manager):** "review them again for design improvements especially visually."
+- **Built:** CSS polish plus small markup tweaks in play.js (showdown tags class `sd`), study.js (graph at real pixel width), odds-tab.js (outs ? kept with its text). No rules or behaviour changes.
+- **Verified:** `npm test` (76/21/114/36/55); phone-view 393 px + 1440 desktop on 12 states (odds empty/cards/chart, setup, hand, 8 seats, showdown, study, home timer/chips/settle, settings): zero console errors, no overflow, setup now fits without scrolling.
+- **Open:** a fresh reviewer also flagged bet-chip placement and 9-seat crowding on phone; left as is (tuned by the QA pass).

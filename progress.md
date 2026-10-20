@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-19 (QA fixes after a fresh-agent QA pass; v1.2.0).
+Last updated: 2026-10-20 (visual design pass; v1.2.1).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -17,6 +17,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Computers Easy / Medium / Hard, hint, measured bb/100 | Done (see Decisions) |
 | Study: hand list, everyone's cards, who-was-ahead graph, EV per decision, luck | Done |
 | Home game: blind timer, chips, cash settle-up, tournament payouts + ICM deal | Done (home.test 14) |
+| Visual design pass (2026-10-20, v1.2.1) | Done: showdown tags under the plate (cards visible), styled bet slider, bigger laptop cards, laptop Odds outs/pot under the slots, Study graph drawn at real width, setup fits a phone, tab labels aligned, 40px ? tap areas. Before/after shots in the manager's scratchpad `design/texas-holdem/` |
 | Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)

@@ -117,7 +117,9 @@
 
   function graph(h) {
     const st = streetEquities(h);
-    const W = 320, Hh = 90, padL = 26, padR = 18, padT = 6, padB = 16;
+    // draw at the box's real pixel width so labels never stretch
+    const box = el.querySelector("#eqg");
+    const W = Math.max(260, Math.round((box && box.clientWidth) || 320)), Hh = 96, padL = 30, padR = 18, padT = 8, padB = 18;
     const x = (k) => padL + (st.length > 1 ? (k * (W - padL - padR)) / (st.length - 1) : 0);
     const y = (v) => padT + (1 - v) * (Hh - padT - padB);
     let paths = "";
@@ -133,7 +135,7 @@
     const labels = st.map((s, k) => `<text x="${x(k)}" y="${Hh - 3}" fill="#969db4" font-size="10" text-anchor="middle">${s.label}</text>`).join("");
     const grid = [0, 0.5, 1].map((v) => `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="#2a3042"/><text x="${padL - 4}" y="${y(v) + 3}" fill="#969db4" font-size="9" text-anchor="end">${v * 100}%</text>`).join("");
     const mine = st.map((s) => (s.m[0] === undefined ? "—" : pct(s.m[0], 0))).join(" → ");
-    return `<svg class="eqgraph" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${grid}${paths}${labels}</svg><div class="muted" style="font-size:12.5px">You: ${mine}</div>`;
+    return `<svg class="eqgraph" viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}">${grid}${paths}${labels}</svg><div class="muted" style="font-size:12.5px">You: ${mine}</div>`;
   }
 
   /** EV of every option at one decision. Computes once, caches on the record. */

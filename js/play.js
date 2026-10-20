@@ -19,6 +19,8 @@
   let hintText = "";
   let eqCache = { key: "", r: null };
   let sizerTo = 0, sizerKey = "";
+  let solo = null;            // the solo game, parked while an online table is open
+  let onlineScreen = null;    // null | "start" | lobby snapshot
 
   function init(container) {
     el = container;
@@ -27,10 +29,28 @@
     el.addEventListener("input", onInput);
     render();
     schedule();
+    if (root.OnlinePlay) root.OnlinePlay.resume();
   }
 
   const S = () => G.state;
-  const save = () => { UI.Store.data.game = G; UI.Store.save(); };
+  const save = () => { if (G && G.online) return; UI.Store.data.game = G; UI.Store.save(); };
+
+  /** Online table hooks (online-play.js). s = state rotated so you are seat 0,
+   *  or null to leave online mode; lobby = a lobby/joining snapshot to show. */
+  function setOnline(s, lobby) {
+    if (s) {
+      if (!G || !G.online) { solo = G; G = { online: true, state: null, decisions: [], startStacks: [], recorded: true }; seen = new Set(); onlineScreen = null; }
+      // chips each seat had when this hand was dealt (for "This hand: +120")
+      if (s.street !== "done" && (!G.state || G.state.street === "done" || G.state.hand !== s.hand)) G.startStacks = s.seats.map((p) => p.stack + p.total);
+      else if (!G.startStacks.length) G.startStacks = s.seats.map((p) => p.stack);
+      G.state = s; hintText = "";
+      render();
+      return;
+    }
+    if (G && G.online) { G = solo; solo = null; seen = new Set(); }
+    onlineScreen = lobby && lobby.status !== "none" ? lobby : null;
+    render();
+  }
 
   // ================================================================ setup
   function renderSetup() {
@@ -48,6 +68,7 @@
       <div class="field"><span class="label">Antes</span>${seg("ante", [["none", "None"], ["each", "Everyone"], ["bb", "Big blind"]])}</div>
       <p class="muted" style="margin:0;font-size:13px">${st.format === "tourney" ? "Blinds go up every 10 hands. Last player with chips wins." : "Blinds stay 10/20. Out of chips? Buy back in."}</p>
       <button class="btn primary" data-start style="min-height:52px;font-size:17px">Deal me in</button>
+      ${root.OnlinePlay ? `<button class="btn" data-online>Play with friends</button>` : ""}
     </div>`;
   }
 
@@ -88,6 +109,7 @@
   }
 
   function dealNext() {
+    if (G && G.online) { root.OnlinePlay.act({ type: "deal" }); return; }
     let s = S();
     // cash game: computers who are out of chips buy back in
     if (s.cfg.format === "cash") {
@@ -105,7 +127,7 @@
   function schedule() {
     clearTimeout(timer);
     const my = ++gen;
-    if (!G || !G.state) return;
+    if (!G || !G.state || G.online) return;
     const s = S();
     if (s.street === "done") {
       if (!G.recorded) recordHand();
@@ -133,6 +155,7 @@
   function heroAct(a) {
     const s = S();
     if (s.toAct !== 0) return;
+    if (G.online) { root.OnlinePlay.act(a); return; }
     const L = E.legal(s);
     const opp = s.seats.filter((p) => p.i !== 0 && !p.folded).length;
     let next;
@@ -199,7 +222,12 @@
   }
 
   function render() {
-    if (!G || !G.state) { renderSetup(); updateTop(); return; }
+    if (!G || !G.state) {
+      if (onlineScreen === "start") root.OnlinePlay.renderStart(el);
+      else if (onlineScreen) root.OnlinePlay.renderLobby(el, onlineScreen);
+      else renderSetup();
+      updateTop(); return;
+    }
     const s = S();
     const n = s.seats.length;
     const wide = root.innerWidth >= 900;
@@ -357,7 +385,7 @@
       const busted = s.seats[0].stack === 0;
       const over = s.over || (s.cfg.format === "tourney" && s.seats[0].out);
       box.innerHTML = `<div class="sizer"></div><div class="act-row" style="grid-template-columns:1fr 1.5fr">
-        <button class="btn" data-study>Study hand</button>
+        ${G.online ? `<button class="btn" data-oleaveask>Leave table</button>` : `<button class="btn" data-study>Study hand</button>`}
         ${over ? `<button class="btn primary" data-newgame>New game</button>` : busted ? `<button class="btn warm" data-rebuy>Buy back in</button>` : `<button class="btn primary" data-next>Next hand</button>`}</div>`;
       return;
     }
@@ -398,13 +426,15 @@
     if (!G || !G.state) { t.innerHTML = ""; return; }
     const s = S();
     const fmtName = { nl: "No limit", pl: "Pot limit", fl: "Limit" }[s.cfg.betting];
-    t.innerHTML = `${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""} <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
+    t.innerHTML = `${G.online && root.OnlinePlay.snap ? `<b class="ocode-top">${esc(root.OnlinePlay.snap.code || "")}</b> · ` : ""}${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""} <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
   }
 
   // ================================================================ events
   function onClick(e) {
     const b = e.target.closest("button");
     if (!b) return;
+    if (b.dataset.online !== undefined) { onlineScreen = "start"; render(); return; }
+    if (root.OnlinePlay && root.OnlinePlay.onClick(b)) return;
     const st = UI.Store.data.setup;
     if (b.dataset.opps) { st.opponents = Math.max(1, Math.min(8, st.opponents + +b.dataset.opps)); UI.Store.save(); renderSetup(); return; }
     if (b.dataset.lvl) { st.level = b.dataset.lvl; UI.Store.save(); renderSetup(); return; }
@@ -444,6 +474,7 @@
   }
 
   function onInput(e) {
+    if (root.OnlinePlay && root.OnlinePlay.onInput(e.target)) return;
     if (e.target.dataset.range === undefined) return;
     sizerTo = +e.target.value;
     const L = E.legal(S());
@@ -462,6 +493,13 @@
   // ================================================================ sheets
   function openMenu() {
     const s = G && G.state;
+    if (G && G.online) {
+      const o = root.OnlinePlay.snap || {};
+      Sheet.open(`<h3>Table ${esc(o.code || "")}</h3><p class="muted">Friends join with this code from Play with friends.</p>
+        <div style="display:grid;gap:8px"><button class="btn danger" data-close data-oleaveask>Leave table</button></div>
+        <div class="row"><button class="btn ghost" data-close>Close</button></div>`);
+      return;
+    }
     Sheet.open(`<h3>Table</h3>
       <div style="display:grid;gap:8px">
         <button class="btn" data-m="new">New table…</button>
@@ -478,12 +516,14 @@
   }
 
   function newGame() {
+    if (G && G.online) { root.OnlinePlay.leave(); return; }
     clearTimeout(timer); gen++;
     G = null; UI.Store.data.game = null; UI.Store.save();
     render();
   }
 
   function rebuyHero() {
+    if (G && G.online) { dealNext(); return; }
     const s = E.apply(S(), { type: "rebuy", seat: 0 });
     G.state = s; save();
     dealNext();
@@ -519,7 +559,10 @@
     Sheet.open(`<h3>${esc(s.seats[s.winner].name)} won</h3>${order.map((p) => `<p>${ordinal(p.place)} · ${esc(p.name)}${p.level ? ` <span class="muted">(${p.level})</span>` : ""}</p>`).join("")}<div class="row"><button class="btn primary" data-close>OK</button></div>`);
   }
 
-  document.addEventListener("click", (e) => { if (e.target.closest("[data-menu]")) openMenu(); });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-menu]")) openMenu();
+    if (e.target.closest("[data-oleaveask]")) root.OnlinePlay.confirmLeave();
+  });
 
-  root.PlayTab = { init, render: () => { render(); }, newGame };
+  root.PlayTab = { init, render: () => { render(); }, newGame, setOnline };
 })(this);

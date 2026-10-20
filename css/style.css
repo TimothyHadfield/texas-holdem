@@ -101,7 +101,10 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .btn.danger { background: #3a1f24; border-color: #5c2a31; color: #ffc9c9; }
 .btn.small { min-height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 8px; }
 .btn.ghost { background: transparent; }
-.muted { color: var(--muted); }
+/* keep coloured buttons coloured on hover (and on iPhone's sticky hover after a tap) */
+.btn.primary:hover:not(:disabled) { background: #8dbbff; }
+.btn.warm:hover:not(:disabled) { background: #f5c477; }
+.btn.danger:hover:not(:disabled) { background: #4a252c; }.muted { color: var(--muted); }
 .qm {
   display: inline-flex; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
   align-items: center; justify-content: center; font-size: 11px; color: var(--muted); background: var(--bg-soft);
@@ -391,6 +394,19 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .toast { position: fixed; left: 50%; bottom: calc(var(--tabh) + var(--safe-b) + 12px); transform: translateX(-50%); background: #2a3042; padding: 8px 14px; border-radius: 10px; font-size: 14px; z-index: 60; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
 .toast[hidden] { display: none; }
 .ver { color: var(--muted); font-size: 12px; padding: 14px 16px; }
+.online .field input { flex: 1; max-width: 260px; }
+.ocard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; }
+.ocard p { margin: 0; font-size: 13px; }
+.ocode-wrap { text-align: center; display: grid; gap: 4px; padding: 6px 0; }
+.ocode-wrap .muted { font-size: 13px; }
+.ocode { font-size: 44px; font-weight: 800; letter-spacing: 8px; color: var(--accent-warm); line-height: 1.1; }
+.ocode-top { color: var(--accent-warm); letter-spacing: 1px; }
+.oseats { display: grid; gap: 6px; }
+.oseat { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 44px; }
+.oseat.human .nm { color: var(--accent); font-weight: 600; }
+.oseat.empty { border-style: dashed; background: transparent; }
+.oseat .muted { font-size: 12px; }
 table.strength { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
 table.strength th { color: var(--muted); font-weight: 600; font-size: 12px; text-align: right; padding: 4px 6px; }
 table.strength td { text-align: right; padding: 5px 6px; border-top: 1px solid var(--line); }

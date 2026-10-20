@@ -3,7 +3,7 @@
   "private": true,
   "description": "Texas Hold'em odds, practice table and home-game helper. Static site; no build step.",
   "scripts": {
-    "test": "node tests/engine.test.js && node tests/home.test.js && node tests/rules-doc.test.js &&node tests/poker.test.js",
+    "test": "node tests/engine.test.js && node tests/home.test.js && node tests/rules-doc.test.js && node tests/online.test.mjs && node tests/poker.test.js",
     "measure": "node tools/measure.js"
   }
 }

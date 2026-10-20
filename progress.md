@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-19 (first build).
+Last updated: 2026-10-19 (QA fixes after a fresh-agent QA pass; v1.2.0).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -12,7 +12,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Part | State |
 |---|---|
 | Evaluator + odds (exact/MC), outs, pot odds, starting-hand chart | Done, tested (poker.test 55) |
-| Engine: NL / PL / FL, cash / tournament, antes (each / big-blind ante), side pots, heads-up rules | Done, tested (engine.test 69, rules-doc.test 114) |
+| Engine: NL / PL / FL, cash / tournament, antes (each / big-blind ante), side pots, heads-up rules | Done, tested (engine.test 76, rules-doc.test 114) |
+| QA pass (fresh agent, live site, 91k-hand fuzz): 17 findings | Fixed: same-hand bust places, all-in capped in PL/FL, no unwinnable pot, uncalled chips not shown as a win/side pot, tournament win line, top-up session, luck only on all-ins, raise EV capped by stacks, 8-seat plates on screen, tags clear of names; Odds/Home bugs (verdict clipped, seen-cards overflow, timer off-tab, lone Them card, huge input, zero-chip settle, minutes stepper, chart "top 0%") by builder branch `qa-odds-home` |
 | Computers Easy / Medium / Hard, hint, measured bb/100 | Done (see Decisions) |
 | Study: hand list, everyone's cards, who-was-ahead graph, EV per decision, luck | Done |
 | Home game: blind timer, chips, cash settle-up, tournament payouts + ICM deal | Done (home.test 14) |
@@ -41,6 +42,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - On a real iPhone (only WebKit at 393 px via phone-view).
 - Timer beep/vibrate on iOS (vibrate is not supported on iOS Safari; beep needs a tap first).
 - Online play with real people on two real phones (only two headless WebKit pages against the live site + real Firebase), host hand-over when the creator drops, and reload mid-game rejoin.
+- Fixed limit: Hard is not measurably stronger than Medium (heads-up −5 ±15 bb/100).
+- Tag placement after the QA fixes was screenshotted only for 3 tables (2-computer showdown, tournament win, 8 computers preflop), not every seat count at showdown.
 - Online hands are not saved to Study (other players' cards are hidden, so the EV maths would be wrong).
 
 ## Rejected / parked

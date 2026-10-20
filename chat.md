@@ -7,3 +7,9 @@
 - **Online:** "Play with friends" on the setup screen → name, Create table (uses the setup choices; open seats become computers) or Join with the 5-letter code → lobby → table. Verified with a scratchpad Playwright script: two WebKit iPhone pages on the live URL, 3 hands, same board on both, each sees only its own cards, zero console errors.
 - **Fixed on the way:** native white `<select>` on iPhone (timer start blinds); primary buttons went dark on hover/tap.
 - **Open:** QA pass findings (fresh agent).
+
+## 2026-10-19 — QA fixes (v1.2.0)
+- **QA:** fresh agent on the live site + 91k-hand fuzz found 7 medium, 10 low issues (see progress.md Status row).
+- **Built:** engine fixes (each new test seen failing on the old engine first), table display fixes in play.js/study.js/style.css, Odds/Home fixes by a builder in worktree `texas-holdem-qafix`.
+- **Verified:** `npm test` (76/14/114/36/55); phone-view 393 px + laptop of a showdown, a tournament win and 8 computers, zero console errors, no overflow.
+- **Note:** progress.md was once edited with sed during the first build (rule slip; content checked, no harm).

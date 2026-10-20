@@ -113,6 +113,12 @@
 
   let actx = null;
   function beep() {
+    // Sound & effects settings (fx.js): the level-up alarm obeys Sound / Alerts / Volume.
+    if (root.FX) {
+      root.FX.play("alarm");
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* not supported */ }
+      return;
+    }
     try {
       actx = actx || new (root.AudioContext || root.webkitAudioContext)();
       [0, 0.25, 0.5].forEach((t) => {

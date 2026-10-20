@@ -21,6 +21,8 @@
   let sizerTo = 0, sizerKey = "";
   let solo = null;            // the solo game, parked while an online table is open
   let onlineScreen = null;    // null | "start" | lobby snapshot
+  const TF = root.TableFX;    // sounds + animations (table-fx.js, fx.js)
+  let fxPrev = null;          // the state the last sounds were planned from (TF.SETUP = setup screen)
 
   function init(container) {
     el = container;
@@ -159,7 +161,7 @@
     const L = E.legal(s);
     const opp = s.seats.filter((p) => p.i !== 0 && !p.folded).length;
     let next;
-    try { next = E.apply(s, a); } catch (e) { UI.toast(e.message); return; }
+    try { next = E.apply(s, a); } catch (e) { UI.toast(e.message); fxError(); return; }
     G.decisions.push({
       street: s.street, board: s.board.slice(), hole: s.seats[0].hole.slice(), pot: L.pot, toCall: L.toCall,
       callAmount: L.callAmount, currentBet: s.currentBet, bet: L.bet, stack: L.stack, opp,
@@ -232,12 +234,26 @@
       if (onlineScreen === "start") root.OnlinePlay.renderStart(el);
       else if (onlineScreen) root.OnlinePlay.renderLobby(el, onlineScreen);
       else renderSetup();
+      fxPrev = TF ? TF.SETUP : null;
       updateTop(); return;
     }
     const s = S();
     const n = s.seats.length;
     const wide = root.innerWidth >= 900;
     let html = "";
+    // what changed since the last state drawn -> sounds, animations, card timing
+    let plan = null;
+    if (TF && fxPrev !== s) {
+      if (UI.Store.data.tab === "play") plan = TF.plan(fxPrev, s, 0);
+      fxPrev = s;
+    }
+    const K = TF ? TF.delayK() : 1;
+    const deal0 = plan ? plan.deal0 : 0, flip0 = plan ? plan.flip0 : 0;
+    const push = plan && plan.anims.find((a) => a.kind === "push");
+    const reveal = push && K ? ` style="animation:fxin .3s ${Math.round(push.at * K)}ms both"` : "";
+    const counting = {};
+    if (plan && K) plan.anims.forEach((a) => { if (a.kind === "won") counting[a.seat] = a.amount; });
+    const oldBets = plan && K && plan.anims.some((a) => a.kind === "sweep") ? Array.from(el.querySelectorAll(".seatbet .bet")).map((b) => ({ html: b.outerHTML, rect: b.getBoundingClientRect() })) : null;
     const resShown = new Set(s.result ? s.result.shown : []);
     const winners = new Set(s.seats.filter((p) => wonBy(s, p.i) > 0).map((p) => p.i));
     s.seats.forEach((p, k) => {
@@ -250,26 +266,27 @@
         seen.add(key);
         const cls = (p.folded && !hero ? "dim " : "") + (isNew ? (showCards && !hero ? "flip" : "deal") : "");
         const dx = (50 - x) * 3, dy = (47 - y) * 3;
-        return card(showCards ? c : null, cls, `style="--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${isNew && !showCards ? (j * n + k) * 45 : 0}ms"`);
+        const delay = !isNew ? 0 : showCards && !hero ? flip0 : (TF ? deal0 + (j * n + k) * 45 : (hero ? 0 : (j * n + k) * 45));
+        return card(showCards ? c : null, cls, `style="--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${Math.round(delay * K)}ms"`);
       }).join("") : "";
       const lvl = p.kind === "human" ? "human" : p.level;
       let tag = "";
-      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win sd">+${fmt(wonBy(s, p.i))}</span>`;
-      else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag sd">${esc(short(s.result.names[p.i]))}</span>`;
+      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win sd"${reveal}>+${fmt(wonBy(s, p.i))}</span>`;
+      else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag sd"${reveal}>${esc(short(s.result.names[p.i]))}</span>`;
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
       const cls = ["seat", hero ? "hero" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
-      html += `<div class="${cls}" style="left:${x}%;top:${y}%">
+      html += `<div class="${cls}" data-seat="${p.i}" style="left:${x}%;top:${y}%">
         <div class="hole">${cards}</div>
         <div class="plate">${tag}<span class="av" style="background:${LEVEL_COLOR[lvl] || "#999"}">${esc(p.name[0])}</span>
-          <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(p.stack)}</div></span></div>
+          <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(p.stack - (counting[p.i] || 0))}</div></span></div>
         ${s.toAct === p.i && p.kind === "bot" ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
       </div>`;
       if (p.bet > 0) {
         let bx = 50 + (x - 50) * 0.56, by = 47 + (y - 47) * (hero ? 0.42 : 0.56);
         // seats level with the board: put the chips under the name plate, clear of the cards
         if (!wide && Math.abs(x - 50) > 30 && Math.abs(y - 47) < 14) { bx = x + (x < 50 ? 3 : -3); by = y + 11; }
-        html += `<div class="seatbet" style="left:${bx}%;top:${by}%"><span class="bet">${chip(p.bet)}${fmt(p.bet)}</span></div>`;
+        html += `<div class="seatbet" data-seat="${p.i}" style="left:${bx}%;top:${by}%"><span class="bet">${chip(p.bet)}${fmt(p.bet)}</span></div>`;
       }
       if (p.i === s.button) {
         const dxp = hero ? x + 13 : 50 + (x - 50) * 0.8 + (x < 50 ? 4 : x > 50 ? -4 : 9), dyp = hero ? y - 2 : 47 + (y - 47) * 0.72;
@@ -284,7 +301,8 @@
       const isNew = !seen.has(key);
       seen.add(key);
       const win = s.street === "done" && s.result && !s.result.byFold;
-      board.push(card(c, isNew ? "deal" : "", `style="animation-delay:${isNew ? (i < 3 ? i * 90 : 0) : 0}ms;--dy:-30px"${win ? "" : ""}`));
+      const bd = !isNew ? 0 : plan && plan.board[i] !== undefined ? plan.board[i] : (i < 3 ? i * 90 : 0);
+      board.push(card(c, isNew ? "deal" : "", `style="animation-delay:${Math.round(bd * K)}ms;--dy:-30px"${win ? "" : ""}`));
     }
     const pot = E.potTotal(s) - s.seats.reduce((a, p) => a + p.bet, 0);
     let resLine = "";
@@ -297,7 +315,7 @@
     }
     if (s.over && s.winner >= 0) resLine = `<b>${esc(s.seats[s.winner].name)} won the tournament</b>` + (resLine ? `<br>${resLine}` : "");
     const potShown = s.street === "done" ? r0(s) : pot;
-    const center = `<div class="center"><div class="pot">${potShown > 0 ? `${chip(potShown)} Pot ${fmt(potShown)}` : ""}</div><div class="board">${board.join("")}</div><div class="result-line">${resLine}</div></div>`;
+    const center = `<div class="center"><div class="pot">${potShown > 0 ? `${chip(potShown)} Pot ${fmt(potShown)}` : ""}</div><div class="board">${board.join("")}</div><div class="result-line"${resLine ? reveal : ""}>${resLine}</div></div>`;
 
     const side = wide ? `<aside class="side"><h3>Odds</h3><div id="sideOdds" style="padding:0 14px 8px"></div><h3>This hand</h3><div class="log scroll" id="sideLog" style="flex:1">${logHTML(s)}</div></aside>` : "";
     el.innerHTML = `<div class="play-wrap">
@@ -309,6 +327,59 @@
     renderHud();
     renderActions();
     updateTop();
+    if (plan) TF.run(plan, { dom: { anim: (a) => fxAnim(a, oldBets) }, celebrateOpts: (kind) => ({ colors: FX_COLORS, at: kind === "big" ? el.querySelector(".pot") : null }) });
+  }
+
+  // ================================================================ effects (fx.js; transform/opacity only)
+  const FX_COLORS = ["#6ea8fe", "#f0b354", "#6ee7a8", "#e8eaf0"];
+  /** A copy of `html` pinned over `rect` that flies to `to`, then disappears. */
+  function ghost(html, rect, to, o) {
+    const F = root.FX;
+    const g = document.createElement("div");
+    g.innerHTML = html;
+    g.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;pointer-events:none;z-index:40;display:flex;align-items:center;justify-content:center`;
+    document.body.appendChild(g);
+    return F.flyTo(g, to, Object.assign({ clone: false }, o)).then(() => g.remove());
+  }
+  function fxAnim(a, oldBets) {
+    const F = root.FX;
+    if (!F || !el.isConnected) return;
+    const seat = (i) => el.querySelector(`.seat[data-seat="${i}"]`);
+    const plate = (i) => { const x = seat(i); return x && x.querySelector(".plate"); };
+    if (a.kind === "bet") {
+      const b = el.querySelector(`.seatbet[data-seat="${a.seat}"]`), p = plate(a.seat), chipEl = b && b.querySelector(".bet");
+      if (!b || !p || !chipEl) return;
+      const pr = p.getBoundingClientRect(), cr = chipEl.getBoundingClientRect();
+      b.style.opacity = "0";
+      ghost(chipEl.outerHTML, { left: pr.left + pr.width / 2 - cr.width / 2, top: pr.top + pr.height / 2 - cr.height / 2, width: cr.width, height: cr.height }, chipEl, { duration: 300, scale: 1 })
+        .then(() => { b.style.opacity = ""; });
+    } else if (a.kind === "sweep") {
+      const pot = el.querySelector(".pot");
+      if (pot) (oldBets || []).forEach((o) => ghost(o.html, o.rect, pot, { duration: 360, fade: true, scale: 1 }));
+    } else if (a.kind === "fold") {
+      const x = seat(a.seat), h = x && x.querySelector(".hole"), board = el.querySelector(".board");
+      if (h && board && h.children.length) F.flyTo(h, board, { duration: 380, fade: true, scale: 0.6 });
+    } else if (a.kind === "knock" || a.kind === "allin") {
+      const p = plate(a.seat);
+      if (p) { F.pop(p); if (a.kind === "allin") F.flash(p, "var(--accent-warm)"); }
+    } else if (a.kind === "push") {
+      const pot = el.querySelector(".pot");
+      if (pot && pot.children.length) a.seats.forEach((i) => { const p = plate(i); if (p) F.flyTo(pot, p, { duration: 450, fade: true }); });
+    } else if (a.kind === "won") {
+      const p = plate(a.seat), st = p && p.querySelector(".st");
+      if (p) F.floatText(p, "+" + fmt(a.amount), "var(--good)");
+      if (st) F.countUp(st, a.stack - a.amount, a.stack, { duration: 600, format: fmt });
+    } else if (a.kind === "turn") {
+      const p = plate(a.seat);
+      if (p) F.pulse(p);
+    }
+  }
+  function fxError() {
+    const F = root.FX;
+    if (!F) return;
+    F.play("error");
+    const box = el && el.querySelector("#actions");
+    if (box) F.shake(box);
   }
   // Pots someone actually won from others (an uncalled bet coming back is not a pot).
   const realPots = (s) => (s.result ? s.result.pots.filter((p) => s.result.byFold || !p.uncontested) : []);

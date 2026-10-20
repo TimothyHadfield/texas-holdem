@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   const { UI } = root;
-  const VERSION = "1.2.1 (2026-10-20)";
+  const VERSION = "1.3.0 (2026-10-20)";
   const TITLES = { odds: "Odds", study: "Study", play: "Hold'em", home: "Home game", settings: "Settings" };
 
   // Measured strengths (tools/measure.js) — shown behind the "How strong?" ?
@@ -52,11 +52,14 @@
       <div class="srow"><div class="t">Computer speed</div><div class="seg" style="width:210px">${["slow", "normal", "fast"].map((k) => `<button data-speed="${k}" class="${s.speed === k ? "on" : ""}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div></div>
       <div class="sgroup label">Cards</div>
       ${sw("fourColor", "Four-colour deck", "Clubs green, diamonds blue")}
+      ${root.FX ? `<div class="sgroup label">Sound & effects</div><div data-fxbox></div>` : ""}
       <div class="sgroup label">About</div>
       <div class="srow"><div class="t">How strong are the computers?</div><button class="qm" data-help="strength">?</button></div>
       <div class="srow"><div class="t">Clear hand history<small>${UI.Store.data.history.length} hands saved on this device</small></div><button class="btn small danger" data-clearhist>Clear</button></div>
       <div class="ver">Version ${VERSION}</div>
     </div>`;
+    const box = v.querySelector("[data-fxbox]");
+    if (box) root.FX.renderSettings(box);
   }
 
   document.addEventListener("change", (e) => {
@@ -68,7 +71,7 @@
   });
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-tab], [data-speed], [data-clearhist], [data-confirmclear]");
-    if (!b) return;
+    if (!b || b.closest(".fx-set")) return; // fx.js's own Speed buttons are animation speed, not computer speed
     if (b.dataset.tab) go(b.dataset.tab);
     else if (b.dataset.speed) { UI.Store.data.settings.speed = b.dataset.speed; UI.Store.save(); renderSettings(document.getElementById("view-settings")); }
     else if (b.dataset.clearhist !== undefined) {
@@ -92,6 +95,14 @@
 
   UI.Store.load();
   applySettings();
+  if (root.FX) {
+    const fx = () => {
+      document.body.classList.toggle("fx-noanim", !root.FX.settings.animations);
+      document.body.classList.toggle("fx-fast", root.FX.settings.animSpeed === "fast");
+    };
+    root.FX.init({ game: "holdem", accent: "#6ea8fe", onChange: fx });
+    fx();
+  }
   root.App = { go, VERSION };
   go(UI.Store.data.tab || "play");
 })(this);

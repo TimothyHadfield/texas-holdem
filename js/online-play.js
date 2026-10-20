@@ -132,7 +132,7 @@
   async function act(a) {
     if (!room) return;
     const r = await room.act(a);
-    if (r && !r.ok && a.type !== "deal") UI.toast(r.message || "That move didn't go through");
+    if (r && !r.ok && a.type !== "deal") { UI.toast(r.message || "That move didn't go through"); if (root.FX) root.FX.play("error"); }
   }
 
   async function leave() {

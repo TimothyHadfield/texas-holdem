@@ -19,3 +19,9 @@
 - **Built:** CSS polish plus small markup tweaks in play.js (showdown tags class `sd`), study.js (graph at real pixel width), odds-tab.js (outs ? kept with its text). No rules or behaviour changes.
 - **Verified:** `npm test` (76/21/114/36/55); phone-view 393 px + 1440 desktop on 12 states (odds empty/cards/chart, setup, hand, 8 seats, showdown, study, home timer/chips/settle, settings): zero console errors, no overflow, setup now fits without scrolling.
 - **Open:** a fresh reviewer also flagged bet-chip placement and 9-seat crowding on phone; left as is (tuned by the QA pass).
+
+## 2026-10-20 — sounds, celebrations, animations (v1.3.0)
+- **Asked (Tim, via manager):** optional sounds that match what happens, win celebrations, fun animations, all switchable in Settings.
+- **Built:** `js/fx.js` (copy of `_fx`), `js/table-fx.js` (state diff -> timeline), play.js effects (chips slide out/in, fold toss, pot to winner, count-up, all-in runout street by street), Settings "Sound & effects", home timer alarm through fx. Event map in progress.md Decisions.
+- **Verified:** `npm test` (76/21/114/36/55 + fx 34; fx.test seen failing first: module missing). phone-view 393 + desktop: settings, dealing, mid-game, all-in runout, tournament win with confetti; Animations off = no delays/animation; fx Speed doesn't touch Computer speed; two-browsers online 4 hands, zero errors.
+- **Open:** listen on a real iPhone.

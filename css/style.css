@@ -415,6 +415,26 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .srow .t { flex: 1; }
 .srow .t small { display: block; color: var(--muted); font-size: 12.5px; }
 .sgroup { padding: 16px 16px 4px; }
+/* Sound & effects rows (js/fx.js renderSettings) drawn like the rows above */
+.fx-set .fx-row { gap: 12px; padding: 12px 16px; border-top: 0; border-bottom: 1px solid var(--line); min-height: 0; }
+.fx-set .fx-lab { flex: 1; }
+.fx-set .seg { width: 210px; }
+.fx-set .seg button[aria-pressed="true"] { background: var(--card-hover); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.fx-set .q { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); align-items: center; justify-content: center; font-size: 11px; color: var(--muted); background: var(--bg-soft); margin-left: 4px; font-weight: 700; padding: 0; position: relative; }
+.fx-set .q::before { content: ""; position: absolute; inset: -11px; }
+.fx-set .fx-why { padding: 0 16px 10px; border-bottom: 1px solid var(--line); }
+.fx-set .fx-test { min-height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-weight: 650; }
+.fx-set .fx-vol { flex: 0 1 150px; accent-color: var(--accent); }
+.fx-set .switch { width: 46px; height: 28px; }
+.fx-set .switch span { background: #2a3042; border-radius: 14px; }
+.fx-set .switch span::after { top: 3px; left: 3px; width: 22px; height: 22px; background: #e8eaf0; }
+.fx-set .switch input:checked + span { background: var(--accent); }
+.fx-set .seg button { flex: 1; padding: 7px 6px; font-size: 13px; min-height: 34px; }
+/* table effects: fade in what the runout would give away; Animations off / Fast */
+@keyframes fxin { from { opacity: 0; } }
+body.fx-noanim .cd.deal, body.fx-noanim .cd.flip { animation: none; }
+body.fx-fast .cd.deal { animation-duration: .21s; }
+body.fx-fast .cd.flip { animation-duration: .22s; }
 
 /* sheet (pop-up): bottom sheet on phone, centred card on laptop */
 .sheet { position: fixed; inset: 0; background: rgba(5,7,12,.6); display: flex; align-items: flex-end; justify-content: center; z-index: 50; animation: fade .15s; }

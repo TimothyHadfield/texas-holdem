@@ -117,7 +117,7 @@
 
   function graph(h) {
     const st = streetEquities(h);
-    const W = 320, Hh = 90, padL = 26, padR = 8, padT = 6, padB = 16;
+    const W = 320, Hh = 90, padL = 26, padR = 18, padT = 6, padB = 16;
     const x = (k) => padL + (st.length > 1 ? (k * (W - padL - padR)) / (st.length - 1) : 0);
     const y = (v) => padT + (1 - v) * (Hh - padT - padB);
     let paths = "";
@@ -136,8 +136,8 @@
     return `<svg class="eqgraph" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${grid}${paths}${labels}</svg><div class="muted" style="font-size:12.5px">You: ${mine}</div>`;
   }
 
-  /** EV table for one decision. Computes once, caches on the record. */
-  function decisionHTML(h, d) {
+  /** EV of every option at one decision. Computes once, caches on the record. */
+  function evFor(h, d) {
     if (!d.ev) {
       const known = P.equity({ hero: d.hole, board: d.board, opponents: Math.max(1, d.opp), trials: 6000, exactLimit: 200000, seed: 11 }).equity;
       const real = P.allEquities([d.hole].concat(d.live.map((i) => h.seats[i].hole)), d.board, [], { trials: 6000, exactLimit: 250000, seed: 13 })[0];
@@ -146,7 +146,10 @@
         if (kind === "fold") return 0;
         if (kind === "check") return eq * d.pot;
         if (kind === "call") return eq * (d.pot + d.callAmount) - d.callAmount;
-        const add = to - d.bet, oppAdd = Math.max(0, to - d.currentBet);
+        // nobody can call more than they have: chips above the biggest
+        // opponent stack come straight back, so they neither win nor risk anything
+        const eff = d.oppMax ? Math.min(to, d.oppMax) : to;
+        const add = eff - d.bet, oppAdd = Math.max(0, eff - d.currentBet);
         return eq * (d.pot + add + oppAdd) - add;
       };
       if (d.toCall > 0) opts.push(["fold", "Fold", 0]);
@@ -160,7 +163,14 @@
       const lost = Math.max(0, best - chosen.known);
       d.ev = { known, real, rows, chosen: chosenK, lost: Math.round(lost) };
     }
-    const e = d.ev;
+    return d.ev;
+  }
+
+  /** Work out every decision's EV for a hand (Play calls this when a hand is saved). */
+  function computeEV(h) { for (const d of h.decisions || []) evFor(h, d); }
+
+  function decisionHTML(h, d) {
+    const e = evFor(h, d);
     const need = d.toCall > 0 ? d.callAmount / (d.pot + d.callAmount) : 0;
     const street = d.street[0].toUpperCase() + d.street.slice(1);
     const lostTxt = e.lost > 0.5 ? `<span class="lost bad">−${fmt(e.lost)}</span>` : `<span class="lost good">best</span>`;
@@ -183,5 +193,5 @@
     if (r) { sel = +r.dataset.h; render(); }
   }
 
-  root.StudyTab = { init, render, show };
+  root.StudyTab = { init, render, show, computeEV };
 })(this);

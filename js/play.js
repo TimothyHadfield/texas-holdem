@@ -164,6 +164,7 @@
       street: s.street, board: s.board.slice(), hole: s.seats[0].hole.slice(), pot: L.pot, toCall: L.toCall,
       callAmount: L.callAmount, currentBet: s.currentBet, bet: L.bet, stack: L.stack, opp,
       live: s.seats.filter((p) => p.i !== 0 && !p.folded).map((p) => p.i),
+      oppMax: Math.max(0, ...s.seats.filter((p) => p.i !== 0 && !p.folded).map((p) => p.bet + p.stack)),
       type: a.type === "allin" ? (L.bet + L.stack <= s.currentBet ? "call" : "raise") : a.type,
       to: a.type === "allin" ? L.bet + L.stack : a.to || 0, canRaise: L.canRaise,
       hint: B.hint(E.view(s, 0), P.rng32(s.hand * 7 + s.log.length)).label,
@@ -186,6 +187,8 @@
     try { rec.allIn = allInLuck(s); } catch (e) { rec.allIn = null; }
     const h = UI.Store.data.history;
     h.unshift(rec);
+    // EV of each decision now, so "Lost to choices" counts every hand, not just the opened ones
+    setTimeout(() => { try { root.StudyTab.computeEV(rec); UI.Store.save(); } catch (e) { /* shown later in Study */ } }, 60);
     if (h.length > 150) h.length = 150;
     const st = UI.Store.data.stats;
     st.hands++; st.net += rec.net;
@@ -194,6 +197,7 @@
 
   function allInLuck(s) {
     if (!s.result || s.result.byFold || s.seats[0].folded) return null;
+    if (!s.seats.some((p) => p.allIn && !p.folded)) return null; // nobody all in: no luck to measure
     // board as it was when the last chips went in
     let boardAt = null;
     for (const e of s.log) if (e.seat >= 0 && ["call", "raise", "bet"].includes(e.type)) boardAt = s.board.slice(0, e.street === "preflop" ? 0 : e.street === "flop" ? 3 : e.street === "turn" ? 4 : 5);
@@ -218,6 +222,8 @@
     const rx = wide ? 41 : 42, ry = wide ? 39 : 37;
     let x = 50 + rx * Math.cos(a), y = 49 + ry * Math.sin(a);
     if (hero) y += wide ? 1 : 2;
+    // phone: keep the outermost name plates on screen (plate is ~21% of the width)
+    if (!wide) x = Math.max(12, Math.min(88, x));
     return [x, y];
   }
 
@@ -233,7 +239,7 @@
     const wide = root.innerWidth >= 900;
     let html = "";
     const resShown = new Set(s.result ? s.result.shown : []);
-    const winners = new Set(s.result ? [].concat(...s.result.pots.map((p) => p.winners)) : []);
+    const winners = new Set(s.seats.filter((p) => wonBy(s, p.i) > 0).map((p) => p.i));
     s.seats.forEach((p, k) => {
       const [x, y] = seatXY(k, n, k === 0);
       const hero = k === 0;
@@ -248,7 +254,7 @@
       }).join("") : "";
       const lvl = p.kind === "human" ? "human" : p.level;
       let tag = "";
-      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win">+${fmt(s.result.net[p.i] + p.total)}</span>`;
+      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win">+${fmt(wonBy(s, p.i))}</span>`;
       else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag">${esc(short(s.result.names[p.i]))}</span>`;
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
@@ -260,7 +266,9 @@
         ${s.toAct === p.i && p.kind === "bot" ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
       </div>`;
       if (p.bet > 0) {
-        const bx = 50 + (x - 50) * 0.56, by = 47 + (y - 47) * (hero ? 0.42 : 0.56);
+        let bx = 50 + (x - 50) * 0.56, by = 47 + (y - 47) * (hero ? 0.42 : 0.56);
+        // seats level with the board: put the chips under the name plate, clear of the cards
+        if (!wide && Math.abs(x - 50) > 30 && Math.abs(y - 47) < 14) { bx = x + (x < 50 ? 3 : -3); by = y + 11; }
         html += `<div class="seatbet" style="left:${bx}%;top:${by}%"><span class="bet">${chip(p.bet)}${fmt(p.bet)}</span></div>`;
       }
       if (p.i === s.button) {
@@ -284,8 +292,10 @@
       const r = s.result;
       const w = r.pots[0].winners.map((i) => s.seats[i].name).join(" & ");
       resLine = r.byFold ? `${esc(w)} win${w === "You" ? "" : "s"} — everyone else folded` : `${esc(w)} win${w === "You" || w.includes("&") ? "" : "s"} with ${esc(r.names[r.pots[0].winners[0]] || "")}`;
-      if (r.pots.length > 1) resLine += ` · ${r.pots.length - 1} side pot${r.pots.length > 2 ? "s" : ""}`;
-    } else if (s.over) resLine = `${esc(s.seats[s.winner].name)} won the tournament`;
+      const side = realPots(s).length - 1;
+      if (side > 0) resLine += ` · ${side} side pot${side > 1 ? "s" : ""}`;
+    }
+    if (s.over && s.winner >= 0) resLine = `<b>${esc(s.seats[s.winner].name)} won the tournament</b>` + (resLine ? `<br>${resLine}` : "");
     const potShown = s.street === "done" ? r0(s) : pot;
     const center = `<div class="center"><div class="pot">${potShown > 0 ? `${chip(potShown)} Pot ${fmt(potShown)}` : ""}</div><div class="board">${board.join("")}</div><div class="result-line">${resLine}</div></div>`;
 
@@ -300,7 +310,20 @@
     renderActions();
     updateTop();
   }
-  const r0 = (s) => (s.result ? s.result.pots.reduce((a, p) => a + p.amount, 0) : 0);
+  // Pots someone actually won from others (an uncalled bet coming back is not a pot).
+  const realPots = (s) => (s.result ? s.result.pots.filter((p) => s.result.byFold || !p.uncontested) : []);
+  const r0 = (s) => realPots(s).reduce((a, p) => a + p.amount, 0);
+  /** Chips seat i collected from real pots this hand (odd chip to the first winner). */
+  function wonBy(s, i) {
+    let w = 0;
+    for (const p of realPots(s)) {
+      const k = p.winners.indexOf(i);
+      if (k < 0) continue;
+      const share = Math.floor(p.amount / p.winners.length);
+      w += share + (k < p.amount - share * p.winners.length ? 1 : 0);
+    }
+    return w;
+  }
   const ordinal = (n) => n + (["th", "st", "nd", "rd"][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]);
   function short(name) { return name.replace("Two pair, ", "2 pair ").replace("Three ", "3 ").replace("Four ", "4 ").replace("Full house, ", "").replace(" full of ", "/").replace(", ", " ").replace(" high", ""); }
 
@@ -362,7 +385,7 @@
         ${need !== null ? `<span>Need <b>${pct(need, 0)}</b></span>` : `<span class="hname">${esc(name)}</span>`}`;
     } else if (s.street === "done") {
       const net = s.seats[0].stack - (G.startStacks[0] || 0);
-      html = `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack + (s.seats[0].buyIns - 1) * 0 - s.cfg.startStack * s.seats[0].buyIns)}</span>`;
+      html = `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
     } else html = `<span class="hname">${me.folded ? "You folded" : esc(name)}</span>`;
     if (set.hints && s.toAct === 0 && !hintText) html += `<button class="btn small" data-hint>Hint</button>`;
     hud.innerHTML = html;
@@ -510,7 +533,13 @@
         const m = e.target.closest("[data-m]");
         if (!m) return;
         if (m.dataset.m === "new") { Sheet.close(); newGame(); }
-        if (m.dataset.m === "topup") { const st = S(); st.seats[0].buyIns++; st.seats[0].stack = st.cfg.startStack; Sheet.close(); save(); render(); }
+        if (m.dataset.m === "topup") {
+          // Top up adds only the missing chips, and counts only those as money put in.
+          const st = S(), me = st.seats[0], add = st.cfg.startStack - me.stack;
+          me.topup = (me.topup || 0) + add; me.stack += add;
+          G.startStacks[0] = (G.startStacks[0] || 0) + add;
+          Sheet.close(); save(); render();
+        }
       });
     });
   }

@@ -25,3 +25,9 @@
 - **Built:** `js/fx.js` (copy of `_fx`), `js/table-fx.js` (state diff -> timeline), play.js effects (chips slide out/in, fold toss, pot to winner, count-up, all-in runout street by street), Settings "Sound & effects", home timer alarm through fx. Event map in progress.md Decisions.
 - **Verified:** `npm test` (76/21/114/36/55 + fx 34; fx.test seen failing first: module missing). phone-view 393 + desktop: settings, dealing, mid-game, all-in runout, tournament win with confetti; Animations off = no delays/animation; fx Speed doesn't touch Computer speed; two-browsers online 4 hands, zero errors.
 - **Open:** listen on a real iPhone.
+
+## 2026-10-20 — real-table look (v1.4.0)
+- **Asked (Tim, via manager):** make the table look like the real thing seen from your seat (words in progress.md Standing instructions).
+- **Built:** shared table kit copied (`js/table.js`, `css/table.css`), fx.js re-copied at 1.0.3 (`data-fxspeed`, app.js workaround removed). Cards rewritten (jumbo index, real pips, courts, lattice backs); felt/rail/betting line; deck that shrinks, muck, chip stacks, bets, pot chips, dealer puck; deal-from-deck + 3-D flip, fold to muck. Your seat pinned to the bottom edge.
+- **Verified:** `npm test` (76/21/114/36/55/34); phone-view 393 + desktop for 5 states (before/after); matrix at 320, 393, 659 landscape, 1280: zero errors, no scroll, overflow only where v1.3.0 already had it; deal filmstrip; Effects speed fast leaves Computer speed normal; two-browsers online 3 hands, boards match, zero errors. Live at 0624b71.
+- **Open:** the independent reviewer sub-agent couldn't start (sub-agent limit); real iPhone look.

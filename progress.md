@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-20 (sounds, celebrations, animations; v1.3.0).
+Last updated: 2026-10-20 (real-table look; v1.4.0, commit 0624b71).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -19,11 +19,13 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Home game: blind timer, chips, cash settle-up, tournament payouts + ICM deal | Done (home.test 14) |
 | Visual design pass (2026-10-20, v1.2.1) | Done: showdown tags under the plate (cards visible), styled bet slider, bigger laptop cards, laptop Odds outs/pot under the slots, Study graph drawn at real width, setup fits a phone, tab labels aligned, 40px ? tap areas. Before/after shots in the manager's scratchpad `design/texas-holdem/` |
 | Sound & effects (2026-10-20, v1.3.0) | Done: `js/fx.js` (unchanged copy of `../_fx/fx.js`), `js/table-fx.js` (state diff -> sounds/animations/celebrations, same for you, computers and online players), Settings section "Sound & effects". fx.test 34 |
+| Real-table look (2026-10-20, v1.4.0) | Done: seen from your seat. Felt + leather rail + wood ring + betting line (stadium shape on laptop); jumbo-index 63:88 cards with real pip layouts (full face from 46 px wide) and blue lattice backs; deck by the pot shrinks as cards are dealt; messy muck takes folds and burns; clay chip stacks in front of everyone, bets pushed toward the line, pot chips; dealer puck. Cards fly from the deck and turn in 3-D; folds fly to the muck. Research in the manager's scratchpad `table/texas-holdem/real.md`, before/after shots in `before/` and `after/` there |
 | Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)
 - "Make sure to get everything right like rules and artwork and specific numbers of cards, routes, details, etc."
 - "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
+- "could you also make sure that each of the games also have a look to them so that the game (either board or card layout) looks almost identical to how the board or card layout looks like in real life, so it's easy to understand if you've already played it before, and also so it feels more like you're actually playing in real life rather than you're playing it online. Even things like how youre cards or other things are laid out infront of you, make it look like they are actual cards laid out similar to how it looks like in real life. Make the decks look like actual decks. Make the board have the same design as it does in real life with the same layouts. It should look kind of like you're looking through a camera that is connected to a user's glasses that is playing in real life (not actually, but the layout and style of everything should be similar)." (2026-10-20)
 - Design: no page scroll; phone bottom tabs, laptop uses width; labels 1–3 words; "?" explains WHY; red→green for good/bad numbers. $0.
 
 ## Traps
@@ -33,7 +35,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - `js/online.js` must stay an unchanged copy of `../_online/online.js`; re-copy it when that one changes. Online state must never carry `cfg.seed` in a view (it would reveal the deck); `publicView` deletes it and a test checks.
 - Online two-browser check: `node tools/two-browsers.mjs <url> <outdir>` (Playwright WebKit from ~/.claude/tools, two iPhone pages, creates a room, plays 3 hands, leaves).
 - In an online game, if a player who left (now a computer seat) is the only one allowed to deal, the next hand deals ~1 s after showdown.
-- `js/fx.js` must stay an unchanged copy of `../_fx/fx.js`. Its Speed buttons use `data-speed` like Computer speed: app.js ignores clicks inside `.fx-set` (else they'd overwrite the computer speed). fx's fallback switch/seg CSS beats ours on equal specificity, so `.fx-set ...` rules in style.css restyle them to match.
+- `js/table.js` and `css/table.css` must stay unchanged copies of `../_table/`; re-copy when those change.
+- `js/fx.js` must stay an unchanged copy of `../_fx/fx.js` (1.0.3+). Its Speed buttons now use `data-fxspeed`, so the old app.js `.fx-set` click workaround was removed (checked: Effects fast leaves Computer speed "normal"). fx's fallback switch/seg CSS beats ours on equal specificity, so `.fx-set ...` rules in style.css restyle them to match.
 - Playwright WebKit on Windows has no Web Audio (silent, `FX.supported` false) and runs rAF slowly, so confetti barely moves in screenshots.
 - Measuring strength takes minutes: `node tools/measure.js` (see the file header for options).
 
@@ -41,6 +44,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Measured bb/100 (6-seat ring, 2 of each): NL Easy −374 / Medium +163 / Hard +211 (20k hands, ±22–28); PL −407 / +152 / +255; FL −55 / +29 / +26. Heads-up Hard vs Medium: NL +52 ±18, PL +54 ±26, FL −5 ±15 (Hard ≈ Medium in fixed limit, said honestly in the app).
 - Moving button (not dead button); all live hands shown at showdown; big-blind ante is blind-first (TDA 2024).
 - Study EV of a raise assumes one caller; "You knew" uses random opponent hands, "Their cards" the real ones.
+- Table look: deck + muck sit by the pot (casino dealer's spot); burns go in the muck; your folded cards stay dimmed in front of you; brass name placards; chip colours by blind size; phone hides opponents' stacks at 7+ players; dealer puck says "DEALER" on laptop, "D" on phone (on phone it sits just past the plate).
 - Hand history keeps the last 150 hands in localStorage (`holdem:v1`).
 - Event -> sound map (table-fx.js header): new hand = chips (blinds) + shuffle, then cardDeal per hole card in deal order; check = knock (custom, two raps); fold = cardSlide + cards fly to the middle; call = chip (chips if >= 4 BB); bet/raise/all in = chips (all in louder, plate flashes); street = bets slide into the pot + cardFlip per card; all-in runout = hands turn up, drumroll, then flop / turn / river one at a time (result line and tags fade in after); showdown = cardFlip per shown card; pot won = coins, pot slides to the winner, "+N" floats, stack counts up; your turn = turn chime + plate pulse (only when it becomes yours); you win a pot >= 50 BB = celebrate big; tournament won = celebrate win; knocked out / lost = celebrate lose; illegal move = error + action bar shakes; home-game blind level up = alarm (was a raw beep). Buttons = fx's default quiet tap.
 
@@ -51,6 +55,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Fixed limit: Hard is not measurably stronger than Medium (heads-up −5 ±15 bb/100).
 - Tag placement after the QA fixes was screenshotted only for 3 tables (2-computer showdown, tournament win, 8 computers preflop), not every seat count at showdown.
 - Sounds were never heard: no Web Audio in headless WebKit; the event -> sound mapping is checked by fx.test (spy on FX.play) and by eye in phone-view. Real iPhone sound, silent switch, and pacing by ear are untested. Online sounds come from the same render diff (4 online hands ran with fx loaded, zero errors) but were not listened to.
+- Real-table look: the brief's independent reviewer sub-agent could not start (session sub-agent limit reached); the review was done by the builder from the screenshots. Pre-existing (same on v1.3.0): at 320 px wide with 7+ players an end-seat plate pokes past the screen edge; in 659x393 landscape the board area runs past the felt. Fold-to-muck animation seen only in a filmstrip frame.
 - Online hands are not saved to Study (other players' cards are hidden, so the EV maths would be wrong).
 
 ## Rejected / parked

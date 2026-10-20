@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Texas Hold'em — Timothy Hadfield</title>
+<meta name="description" content="Odds of winning each hand, computer players at measured strength, hand-by-hand study, and a home-game chip and blind tracker.">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <a class="home-link" href="../" aria-label="All games">&#8592;</a>
+    <h1 id="title">Hold'em</h1>
+    <span class="spacer"></span>
+    <span id="topInfo" class="top-info"></span>
+  </header>
+
+  <main id="views">
+    <section class="view" id="view-odds" data-view="odds"></section>
+    <section class="view" id="view-study" data-view="study"></section>
+    <section class="view" id="view-play" data-view="play"></section>
+    <section class="view" id="view-home" data-view="home"></section>
+    <section class="view" id="view-settings" data-view="settings"></section>
+  </main>
+
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <button data-tab="odds"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Odds</span></button>
+    <button data-tab="study"><svg viewBox="0 0 24 24"><path d="M4 5h11a4 4 0 0 1 4 4v11H8a4 4 0 0 1-4-4z"/><path d="M8 9h7M8 13h5"/></svg><span>Study</span></button>
+    <button data-tab="play" class="hub"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="11" height="16" rx="2" transform="rotate(-10 8 12)"/><rect x="10" y="4" width="11" height="16" rx="2"/></svg><span>Play</span></button>
+    <button data-tab="home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/></svg><span>Home game</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span>Settings</span></button>
+  </nav>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true">
+    <div id="sheetBody"></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/poker.js?v=1"></script>
+<script src="js/preflop.js?v=1"></script>
+<script src="js/engine.js?v=1"></script>
+<script src="js/bots.js?v=1"></script>
+<script src="js/homecalc.js?v=1"></script>
+<script src="js/ui.js?v=1"></script>
+<script src="js/odds-tab.js?v=1"></script>
+<script src="js/play.js?v=1"></script>
+<script src="js/study.js?v=1"></script>
+<script src="js/home.js?v=1"></script>
+<script src="js/app.js?v=1"></script>
+</body>
+</html>

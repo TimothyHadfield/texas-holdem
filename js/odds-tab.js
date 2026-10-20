@@ -74,7 +74,7 @@
       return `<div class="potodds"><span class="label">Pot</span><input type="number" inputmode="decimal" min="0" data-f="pot" value="${esc(S.pot)}" placeholder="0"><span class="label">To call</span><input type="number" inputmode="decimal" min="0" data-f="bet" value="${esc(S.bet)}" placeholder="0">${qm("potodds")}${v}</div>`;
     };
     if (hero.length < 2) {
-      big.innerHTML = `<div class="bignum muted" style="font-size:22px">Pick your two cards</div><div class="subnums">Tap a card below</div>`;
+      big.innerHTML = `<div class="bignum" style="font-size:22px">Pick your two cards</div><div class="subnums">Tap a card below</div>`;
       extra.innerHTML = potOddsHTML(null);
       return;
     }
@@ -88,7 +88,7 @@
         const o = P.outs(hero, board, them.concat(S.seen));
         if (o && o.cards.length) {
           const kinds = Object.entries(o.byKind).map(([k, v]) => `${esc(k)} ${v.length}`).join(" · ");
-          outsHTML = `<div class="outs-line">Outs <b>${o.cards.length}</b> (${kinds}) · next card <b>${pct(o.nextPct, 0)}</b>${board.length === 3 ? ` · by the river <b>${pct(o.riverPct, 0)}</b>` : ""}${qm("outs")}</div>`;
+          outsHTML = `<div class="outs-line">Outs <b>${o.cards.length}</b> (${kinds}) · <span class="nw">next card <b>${pct(o.nextPct, 0)}</b>${board.length === 3 ? "" : qm("outs")}</span>${board.length === 3 ? ` · <span class="nw">by the river <b>${pct(o.riverPct, 0)}</b>${qm("outs")}</span>` : ""}</div>`;
         } else if (o) outsHTML = `<div class="outs-line">No outs to a better kind of hand${qm("outs")}</div>`;
       }
       extra.innerHTML = outsHTML + potOddsHTML(r.equity);

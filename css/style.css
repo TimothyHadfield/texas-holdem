@@ -76,6 +76,7 @@ nav.tabs button {
 nav.tabs button:active { transform: scale(.94); }
 nav.tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 nav.tabs button.on { color: var(--accent); }
+nav.tabs button:not(.hub) svg { margin: 3px 0; }
 nav.tabs button.hub svg { width: 28px; height: 28px; }
 nav.tabs button.hub.on { color: var(--accent-warm); }
 
@@ -108,8 +109,10 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .qm {
   display: inline-flex; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
   align-items: center; justify-content: center; font-size: 11px; color: var(--muted); background: var(--bg-soft);
-  cursor: pointer; vertical-align: 2px; margin-left: 4px; flex: none; font-weight: 700; padding: 0;
+  cursor: pointer; vertical-align: 2px; margin-left: 4px; flex: none; font-weight: 700; padding: 0; position: relative;
 }
+.qm::before { content: ""; position: absolute; inset: -11px; }
+.nw { white-space: nowrap; }
 .seg { display: flex; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
 .seg button { flex: 1; border: 0; background: none; border-radius: 7px; padding: 7px 6px; font-size: 13px; font-weight: 650; color: var(--muted); min-height: 34px; white-space: nowrap; }
 .seg button.on { background: var(--card-hover); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
@@ -197,6 +200,8 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .seat.out { opacity: .25; }
 .seat .tag { position: absolute; top: -16px; right: -6px; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); z-index: 3; white-space: nowrap; }
 .seat .tag.win { background: var(--accent-warm); color: #231703; border-color: var(--accent-warm); }
+/* showdown tags sit under the plate so they never cover the cards just turned over */
+.seat:not(.hero) .tag.sd { top: auto; bottom: -15px; right: 50%; transform: translateX(50%); }
 .seat.hero { width: 120px; }
 .seat.hero .hole { height: auto; margin-bottom: -8px; }
 .seat.hero .hole .cd { --w: clamp(40px, 11vw, 58px); }
@@ -216,9 +221,14 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .hud .hname { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .actions { padding: 8px 10px 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; border-top: 1px solid var(--line); background: #12151d; }
-.sizer { display: flex; gap: 5px; align-items: center; height: 36px; min-width: 0; }
-.sizer .btn.small { padding: 6px 8px; min-width: 34px; }
-.sizer input[type=range] { flex: 1; accent-color: var(--accent-warm); min-width: 60px; height: 30px; }
+.sizer { display: flex; gap: 5px; align-items: center; height: 40px; min-width: 0; }
+.sizer .btn.small { padding: 6px 8px; min-width: 38px; min-height: 40px; }
+.sizer input[type=range] { flex: 1; min-width: 60px; height: 34px; -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
+.sizer input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: #3a4258; }
+.sizer input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: #3a4258; }
+.sizer input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: var(--accent-warm); border: 3px solid #fff3dc; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.sizer input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-warm); border: 3px solid #fff3dc; }
+.sizer input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .sizer .amt { width: 52px; flex: none; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
 .sizer .btn { flex: none; }
 .act-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.25fr); gap: 8px; }
@@ -237,10 +247,13 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
   .seat .av { width: 34px; height: 34px; font-size: 14px; } .seat .nm { font-size: 14px; max-width: 72px; } .seat .st { font-size: 15px; }
   .seat .hole .cd { --w: 40px; } .seat .hole { height: 56px; }
   .seat .tag { font-size: 11.5px; }
+  .seat:not(.hero) .tag.sd { bottom: -20px; }
   .dealer { width: 26px; height: 26px; font-size: 12px; }
-  .seat.hero .hole .cd { --w: 64px; }
-  .board .cd { --w: 64px; }
-  .pot { font-size: 15px; }
+  .seat.hero .hole .cd { --w: clamp(64px, 5.4vw, 80px); }
+  .board .cd { --w: clamp(64px, 5.4vw, 80px); }
+  .board { gap: 6px; }
+  .pot { font-size: 16px; }
+  .result-line { font-size: 16px; min-height: 22px; }
   .actions { grid-template-columns: 1fr; max-width: 760px; width: 100%; margin: 0 auto; border-top: 0; background: transparent; }
   .play-main .actions-wrap { border-top: 1px solid var(--line); background: #12151d; }
 }
@@ -249,8 +262,9 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .log .st { color: var(--accent-warm); font-weight: 700; margin-top: 6px; }
 
 /* setup */
-.setup { flex: 1; display: flex; flex-direction: column; padding: 14px 16px; gap: 12px; max-width: 560px; width: 100%; margin: 0 auto; }
-.setup h2 { margin: 2px 0 0; font-size: 22px; }
+.setup { flex: 1; display: flex; flex-direction: column; padding: 10px 16px; gap: 10px; max-width: 560px; width: 100%; margin: 0 auto; }
+.setup h2 { margin: 0; font-size: 21px; }
+@media (min-width: 900px) and (min-height: 700px) { .setup { justify-content: center; gap: 14px; } .setup h2 { font-size: 26px; } }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .field > .label { flex: none; }
 .field .seg { flex: 1; max-width: 330px; }
@@ -291,14 +305,19 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .outs-line b { color: var(--text); }
 .odds-low { display: flex; flex-direction: column; min-height: 0; }
 @media (min-width: 900px) {
-  .odds-wrap { grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.2fr); grid-template-rows: auto 1fr; }
+  .odds-wrap { grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.2fr); grid-template-rows: auto auto 1fr; }
+  .odds-low { display: contents; }
+  .picker { grid-column: 2; grid-row: 2 / 4; }
+  .odds-extra { grid-column: 1; grid-row: 3; overflow: visible; }
   .odds-top { grid-column: 1 / -1; padding: 16px 24px; }
   .bignum { font-size: 56px; }
   .slots { padding: 16px 24px; align-content: start; }
-  .slot-row .cd { --w: 46px; }
-  .slot-row { min-height: 70px; }
+  .slot-row .cd { --w: 58px; }
+  .slot-row { min-height: 90px; }
   .picker { padding: 16px 24px 8px; gap: 5px; }
-  .pk { font-size: 16px; max-height: 64px; } .pk i { font-size: 15px; }
+  .pk { font-size: 19px; max-height: 84px; border-radius: 7px; } .pk i { font-size: 17px; }
+  .outs-line { font-size: 15px; }
+  .odds-extra { gap: 10px; }
   .odds-extra { padding: 8px 24px 16px; }
 }
 
@@ -319,6 +338,7 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .players-tbl td { padding: 4px 4px; border-bottom: 1px solid rgba(42,48,66,.6); vertical-align: middle; }
 .players-tbl .cards { display: flex; gap: 2px; }
 .players-tbl .cd { --w: 22px; }
+.players-tbl .cd.dim { filter: brightness(.75) saturate(.7); }
 .dec { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
 .dec .row1 { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
 .dec table { width: 100%; font-size: 12.5px; border-collapse: collapse; margin-top: 4px; }
@@ -327,7 +347,7 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .dec tr.chosen td { font-weight: 800; }
 .lost { font-weight: 800; }
 .study-tabs { padding: 8px 14px; border-bottom: 1px solid var(--line); }
-.eqgraph { width: 100%; height: 90px; display: block; }
+.eqgraph { max-width: 100%; height: auto; display: block; }
 .luck { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .luck div { background: var(--card); border-radius: 10px; padding: 6px 8px; }
 .luck b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -340,6 +360,13 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
   .hand-detail { padding: 14px 24px; }
   .hd-board .cd { --w: 46px; }
   .players-tbl .cd { --w: 30px; }
+  /* keep name, cards and hand together instead of spreading over 1000px */
+  .players-tbl td:first-child, .players-tbl td:nth-child(2) { width: 1%; white-space: nowrap; padding-right: 18px; }
+  .players-tbl { font-size: 14px; }
+  .luck b { font-size: 24px; }
+  .luck span { font-size: 12px; }
+  .hrow .cd { --w: 28px; }
+  .hrow { padding: 10px 16px; }
 }
 
 /* starting-hand chart */
@@ -372,9 +399,13 @@ nav.tabs button.hub.on { color: var(--accent-warm); }
 .settle-tbl th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 6px 6px; }
 .settle-tbl td { padding: 6px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .settle-tbl input { width: 70px; padding: 6px; }
+.settle-tbl td:first-child { padding-left: 14px; }
+.settle-tbl td:last-child { padding-right: 14px; }
 .transfer { padding: 8px 14px; font-size: 15px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
 .transfer b { font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) {
+  .timer .ctrls .btn { min-height: 52px; min-width: 64px; }
+  .timer .ctrls .play { min-width: 120px; min-height: 60px; font-size: 20px; }
   .home-body.split { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; flex: 1; }
 }
 

@@ -254,8 +254,8 @@
       }).join("") : "";
       const lvl = p.kind === "human" ? "human" : p.level;
       let tag = "";
-      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win">+${fmt(wonBy(s, p.i))}</span>`;
-      else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag">${esc(short(s.result.names[p.i]))}</span>`;
+      if (s.street === "done" && winners.has(p.i)) tag = `<span class="tag win sd">+${fmt(wonBy(s, p.i))}</span>`;
+      else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag sd">${esc(short(s.result.names[p.i]))}</span>`;
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
       const cls = ["seat", hero ? "hero" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");

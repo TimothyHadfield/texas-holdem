@@ -29,13 +29,25 @@
 
   const RANK_SHOW = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
   /** One playing card. c = 0..51, null = face down, -1 = empty slot. */
+  /* Cards are drawn like a casino "jumbo index" poker deck (63 x 88): big rank + suit in two
+     opposite corners, the real pip layout smaller in the middle, framed two-headed courts.
+     Small cards (under ~36 px, set in CSS) show the corner index and one big suit only.
+     The paper, edge and back come from the shared table kit (css/table.css). */
+  function middle(r, sym) {
+    const rank = RANK_SHOW[r];
+    if (rank === "A") return `<span class="tbl-pip">${sym}</span>`;
+    if ("JQK".includes(rank)) return `<span class="tbl-pip tbl-court"><em>${rank}${sym}</em><em>${rank}${sym}</em></span>`;
+    const xy = root.TABLE && root.TABLE.PIPXY[rank];
+    return xy ? `<span class="tbl-pips">${xy.map(([x, y]) => `<b style="left:${x}%;top:${y}%"${y > 50 ? ' class="r"' : ""}>${sym}</b>`).join("")}</span>` : "";
+  }
   function card(c, cls, attrs) {
     cls = cls || "";
     attrs = attrs || "";
-    if (c === null || c === undefined) return `<div class="cd back ${cls}" ${attrs}></div>`;
+    if (c === null || c === undefined) return `<div class="cd tbl-card back tbl-back tbl-lattice ${cls}" ${attrs}></div>`;
     if (c < 0) return `<div class="cd slot ${cls}" ${attrs}></div>`;
     const r = c >> 2, s = c & 3, sym = P.SUIT_SYMBOL[s];
-    return `<div class="cd s${s} ${cls}" ${attrs} aria-label="${RANK_SHOW[r]}${"cdhs"[s]}"><span class="ix">${RANK_SHOW[r]}<i>${sym}</i></span><span class="pip">${sym}</span></div>`;
+    const ix = (b) => `<span class="ix${b ? " b" : ""}">${RANK_SHOW[r]}<i>${sym}</i></span>`;
+    return `<div class="cd tbl-card s${s} ${cls}" ${attrs} aria-label="${RANK_SHOW[r]}${"cdhs"[s]}">${ix()}<span class="pip">${sym}</span><span class="pp">${middle(r, sym)}</span>${ix(1)}</div>`;
   }
   const cardText = (c) => RANK_SHOW[c >> 2] + P.SUIT_SYMBOL[c & 3];
 

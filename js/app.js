@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   const { UI } = root;
-  const VERSION = "1.3.0 (2026-10-20)";
+  const VERSION = "1.4.0 (2026-10-20)";
   const TITLES = { odds: "Odds", study: "Study", play: "Hold'em", home: "Home game", settings: "Settings" };
 
   // Measured strengths (tools/measure.js) — shown behind the "How strong?" ?
@@ -71,7 +71,7 @@
   });
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-tab], [data-speed], [data-clearhist], [data-confirmclear]");
-    if (!b || b.closest(".fx-set")) return; // fx.js's own Speed buttons are animation speed, not computer speed
+    if (!b) return;
     if (b.dataset.tab) go(b.dataset.tab);
     else if (b.dataset.speed) { UI.Store.data.settings.speed = b.dataset.speed; UI.Store.save(); renderSettings(document.getElementById("view-settings")); }
     else if (b.dataset.clearhist !== undefined) {

@@ -4,7 +4,7 @@
 (function (G) {
 'use strict';
 if (G.FX && G.FX.version) return;
-const VERSION = '1.0.1';
+const VERSION = '1.0.3';
 const DEFAULTS = { sound: true, volume: 60, moves: true, alerts: true, ui: true, celebrations: true, animations: true, animSpeed: 'normal' };
 const CATS = ['moves', 'alerts', 'ui', 'celebrations'];
 let key = 'fx:settings', S = Object.assign({}, DEFAULTS), subs = [], accent = '#6ea8fe';
@@ -343,12 +343,12 @@ function renderSettings(box) {
     `<div class="fx-why" hidden>Sounds follow your phone's volume. The iPhone silent switch may mute them.</div>` +
     `<div class="set-row fx-row" data-row="volume"><label class="fx-lab" for="${id}-vol">Volume</label><input type="range" class="fx-vol" id="${id}-vol" min="0" max="100" step="5" aria-label="Volume"><button type="button" class="fx-test">Test</button></div>` +
     sw('moves', 'Game sounds') + sw('alerts', 'Alerts') + sw('ui', 'Button clicks') + sw('celebrations', 'Celebrations') + sw('animations', 'Animations') +
-    `<div class="set-row fx-row" data-row="animSpeed"><span class="fx-lab">Speed</span><div class="seg" role="group" aria-label="Animation speed"><button type="button" data-speed="normal">Normal</button><button type="button" data-speed="fast">Fast</button></div></div>`;
+    `<div class="set-row fx-row" data-row="animSpeed"><span class="fx-lab">Effects speed</span><div class="seg" role="group" aria-label="Animation speed"><button type="button" data-fxspeed="normal">Normal</button><button type="button" data-fxspeed="fast">Fast</button></div></div>`;
   const q = s => wrap.querySelector(s), qa = s => Array.from(wrap.querySelectorAll(s));
   const sync = () => {
     qa('input[data-fx]').forEach(i => { i.checked = !!S[i.dataset.fx]; const l = i.parentNode; if (l.classList) l.classList.toggle('on', i.checked); });
     q('.fx-vol').value = S.volume;
-    qa('[data-speed]').forEach(b => b.setAttribute('aria-pressed', String(S.animSpeed === b.dataset.speed)));
+    qa('[data-fxspeed]').forEach(b => b.setAttribute('aria-pressed', String(S.animSpeed === b.dataset.fxspeed)));
     ['volume', 'moves', 'alerts', 'ui'].forEach(k => q(`[data-row="${k}"]`).classList.toggle('dim', !S.sound));
     q('[data-row="animSpeed"]').classList.toggle('dim', !S.animations);
   };
@@ -357,7 +357,7 @@ function renderSettings(box) {
   q('.fx-vol').addEventListener('change', () => play('ding', { force: true }));
   wrap.addEventListener('click', e => {
     const t = e.target;
-    if (t.dataset && t.dataset.speed) { set('animSpeed', t.dataset.speed); pop(t); }
+    if (t.dataset && t.dataset.fxspeed) { set('animSpeed', t.dataset.fxspeed); pop(t); }
     else if (t.classList && t.classList.contains('fx-test')) { unlock(); play('turn', { force: true }); pop(t); }
     else if (t.classList && t.classList.contains('q')) { const w = q('.fx-why'); w.hidden = !w.hidden; t.setAttribute('aria-expanded', String(!w.hidden)); }
   });

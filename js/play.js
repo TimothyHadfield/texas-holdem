@@ -217,15 +217,16 @@
   }
 
   // ================================================================ render
-  function seatXY(k, n, hero) {
+  function seatXY(k, n, hero, W) {
     // k-th seat clockwise from you (k = 0 is you at the bottom centre)
     const a = Math.PI / 2 + (2 * Math.PI * k) / n;
     const wide = root.innerWidth >= 900;
     const rx = wide ? 41 : 42, ry = wide ? 39 : 37;
     let x = 50 + rx * Math.cos(a), y = 49 + ry * Math.sin(a);
     if (hero) y += wide ? 1 : 2;
-    // phone: keep the outermost name plates on screen (plate is ~21% of the width)
-    if (!wide) x = Math.max(12, Math.min(88, x));
+    // phone: keep the outermost name plates on screen (plate is 82 px wide)
+    const pad = W ? Math.max(12, (43 / W) * 100) : 12;
+    if (!wide) x = Math.max(pad, Math.min(100 - pad, x));
     return [x, y];
   }
 
@@ -256,18 +257,24 @@
     const oldBets = plan && K && plan.anims.some((a) => a.kind === "sweep") ? Array.from(el.querySelectorAll(".seatbet .bet")).map((b) => ({ html: b.outerHTML, rect: b.getBoundingClientRect() })) : null;
     const resShown = new Set(s.result ? s.result.shown : []);
     const winners = new Set(s.seats.filter((p) => wonBy(s, p.i) > 0).map((p) => p.i));
+    // seats whose fold is animated right now keep their cards one more frame, so they can fly to the muck
+    const foldingNow = new Set(plan && K ? plan.anims.filter((a) => a.kind === "fold").map((a) => a.seat) : []);
+    // table box in px (for turning each player's cards to face them)
+    const W = Math.max(280, el.clientWidth - (wide ? 340 : 0)), H = Math.max(240, el.clientHeight - 170);
     s.seats.forEach((p, k) => {
-      const [x, y] = seatXY(k, n, k === 0);
+      const [x, y] = seatXY(k, n, k === 0, W);
       const hero = k === 0;
       const showCards = hero || resShown.has(p.i);
-      const cards = p.hole.length ? p.hole.map((c, j) => {
+      // cards lie on the felt pointing at their owner: 0 deg for you, 180 across the table, 90 at the ends
+      const theta = Math.round(Math.atan2(-(x - 50) * W, (y - 47) * H) * 180 / Math.PI);
+      const keepCards = hero || !p.folded || foldingNow.has(p.i);
+      const cards = p.hole.length && keepCards ? p.hole.map((c, j) => {
         const key = `${s.hand}-${p.i}-${j}${showCards ? "f" : ""}`;
         const isNew = !seen.has(key);
         seen.add(key);
-        const cls = (p.folded && !hero ? "dim " : "") + (isNew ? (showCards && !hero ? "flip" : "deal") : "");
-        const dx = (50 - x) * 3, dy = (47 - y) * 3;
-        const delay = !isNew ? 0 : showCards && !hero ? flip0 : (TF ? deal0 + (j * n + k) * 45 : (hero ? 0 : (j * n + k) * 45));
-        return card(showCards ? c : null, cls, `style="--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${Math.round(delay * K)}ms"`);
+        const cls = (p.folded ? "dim " : "") + (isNew ? (showCards && !hero ? "flip" : hero ? "dealflip" : "deal") : "");
+        const delay = !isNew ? 0 : showCards && !hero ? flip0 : (TF ? deal0 + (j * n + k) * 45 : (j * n + k) * 45);
+        return card(showCards ? c : null, cls, `style="animation-delay:${Math.round(delay * K)}ms"`);
       }).join("") : "";
       const lvl = p.kind === "human" ? "human" : p.level;
       let tag = "";
@@ -276,23 +283,54 @@
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
       const cls = ["seat", hero ? "hero" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
+      // your chips: a real stack beside your cards (the number stays on the plate)
+      const shownStack = p.out ? 0 : p.stack - (counting[p.i] || 0);
+      // (a phone with 7+ players has no room for everyone's stack: the number on the plate stays)
+      const myStack = !p.out && shownStack > 0 && (wide || hero || n <= 6) ? chipStacks(shownStack, s.bb, wide || hero ? 6 : 4, wide || hero ? 3 : 2) : "";
+      const level = Math.abs(y - 47) < 14 && Math.abs(x - 50) > 30; // seats at the ends, level with the board
       html += `<div class="${cls}" data-seat="${p.i}" style="left:${x}%;top:${y}%">
-        <div class="hole">${cards}</div>
-        <div class="plate">${tag}<span class="av" style="background:${LEVEL_COLOR[lvl] || "#999"}">${esc(p.name[0])}</span>
-          <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(p.stack - (counting[p.i] || 0))}</div></span></div>
+        ${hero ? `<div class="hole">${cards}</div>${myStack ? `<div class="stk mine">${myStack}</div>` : ""}` : ""}
+        <div class="plate">${tag}<span class="av" style="--lv:${LEVEL_COLOR[lvl] || "#999"}">${esc(p.name[0])}</span>
+          <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(shownStack)}</div></span></div>
         ${s.toAct === p.i && p.kind === "bot" ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
+        ${hero && p.i === s.button ? `<div class="dealer"><span>${wide ? "DEALER" : "D"}</span></div>` : ""}
       </div>`;
-      if (p.bet > 0) {
-        let bx = 50 + (x - 50) * 0.56, by = 47 + (y - 47) * (hero ? 0.42 : 0.56);
-        // seats level with the board: put the chips under the name plate, clear of the cards
-        if (!wide && Math.abs(x - 50) > 30 && Math.abs(y - 47) < 14) { bx = x + (x < 50 ? 3 : -3); by = y + 11; }
-        html += `<div class="seatbet" data-seat="${p.i}" style="left:${bx}%;top:${by}%"><span class="bet">${chip(p.bet)}${fmt(p.bet)}</span></div>`;
+      if (!hero && !p.out && (cards || myStack)) {
+        // in front of the player on the felt: their chips, and their two cards turned to face them
+        let sx = x + (50 - x) * (!wide && y < 40 && Math.abs(x - 50) > 30 ? 0.22 : 0.3), sy = y + (47 - y) * (wide ? 0.34 : y > 47 ? 0.2 : 0.27);
+        // phone: at the ends there's no felt between the plate and the board, so the cards sit just below the plate
+        if (!wide && level) { sx = x + (x < 50 ? 5 : -5); sy = y + 11; }
+        // phone, far side: turned-up cards are taller, so slide them clear of the plate and its hand label
+        else if (!wide && showCards && y < 47) sy += 4;
+        const rot = showCards ? Math.max(-10, Math.min(10, Math.round(-(x - 50) / 4))) : theta;
+        const side = Math.abs(x - 50) < 1 ? "c" : x < 50 ? "l" : "r";
+        html += `<div class="spot ${side}${p.folded ? " folded" : ""}" data-seat="${p.i}" style="left:${sx}%;top:${sy}%">
+          ${myStack ? `<div class="stk">${myStack}</div>` : ""}<div class="hole${showCards ? " up" : ""}" data-rot="${rot}" style="rotate:${rot}deg">${cards}</div></div>`;
       }
-      if (p.i === s.button) {
-        const dxp = hero ? x + 13 : 50 + (x - 50) * 0.8 + (x < 50 ? 4 : x > 50 ? -4 : 9), dyp = hero ? y - 2 : 47 + (y - 47) * 0.72;
-        html += `<div class="dealer" style="left:${dxp}%;top:${dyp}%">D</div>`;
+      if (p.bet > 0) {
+        let bx = 50 + (x - 50) * 0.52, by = 47 + (y - 47) * (hero ? 0.4 : 0.5);
+        // laptop, seats at the ends: the board is in the way, so the bet sits just below their cards
+        if (wide && level) { bx = x + (50 - x) * 0.3; by = y + 10; }
+        // phone, seats at the ends: the bet goes just above the plate, clear of the board and their cards
+        if (!wide && level) { bx = x + (x < 50 ? 7 : -7); by = y - 10; }
+        html += `<div class="seatbet" data-seat="${p.i}" style="left:${bx}%;top:${by}%"><span class="bet">${chipStacks(p.bet, s.bb, 4, wide ? 3 : 2)}<span class="amt">${fmt(p.bet)}</span></span></div>`;
+      }
+      if (p.i === s.button && !hero) {
+        let dxp = 50 + (x - 50) * 0.62 + (Math.abs(x - 50) < 1 ? (wide ? 11 : 16) : x < 50 ? 5 : -5), dyp = 47 + (y - 47) * 0.62;
+        // phone: the felt is too small to put it between player and board, so it sits on the felt just past the plate
+        if (!wide && Math.abs(x - 50) >= 1) {
+          if (level) { dxp = x + (x < 50 ? 15 : -15); dyp = y - 1; }
+          else { dxp = x + (x < 50 ? -3 : 3); dyp = y + (y > 47 ? -8 : 8); }
+        }
+        html += `<div class="dealer" style="left:${dxp}%;top:${dyp}%"><span>${wide ? "DEALER" : "D"}</span></div>`;
       }
     });
+    // the dealer's spot: the deck (thickness = cards left) and the muck (folded hands + burn cards)
+    const dealt = s.seats.reduce((a, p) => a + p.hole.length, 0);
+    const burns = s.board.length >= 3 ? s.board.length - 2 : 0;
+    const deckLeft = s.street === "idle" ? 52 : Math.max(0, 52 - dealt - burns - s.board.length);
+    const mucked = burns + s.seats.reduce((a, p) => a + (p.i !== 0 && p.folded && !foldingNow.has(p.i) ? p.hole.length : 0), 0);
+    const muck = muckHTML(mucked, `${s.cfg.seed}-${s.hand}`);
     const board = [];
     for (let i = 0; i < 5; i++) {
       const c = s.board[i];
@@ -302,7 +340,7 @@
       seen.add(key);
       const win = s.street === "done" && s.result && !s.result.byFold;
       const bd = !isNew ? 0 : plan && plan.board[i] !== undefined ? plan.board[i] : (i < 3 ? i * 90 : 0);
-      board.push(card(c, isNew ? "deal" : "", `style="animation-delay:${Math.round(bd * K)}ms;--dy:-30px"${win ? "" : ""}`));
+      board.push(card(c, isNew ? "dealflip" : "", `style="animation-delay:${Math.round(bd * K)}ms"${win ? "" : ""}`));
     }
     const pot = E.potTotal(s) - s.seats.reduce((a, p) => a + p.bet, 0);
     let resLine = "";
@@ -315,19 +353,67 @@
     }
     if (s.over && s.winner >= 0) resLine = `<b>${esc(s.seats[s.winner].name)} won the tournament</b>` + (resLine ? `<br>${resLine}` : "");
     const potShown = s.street === "done" ? r0(s) : pot;
-    const center = `<div class="center"><div class="pot">${potShown > 0 ? `${chip(potShown)} Pot ${fmt(potShown)}` : ""}</div><div class="board">${board.join("")}</div><div class="result-line"${resLine ? reveal : ""}>${resLine}</div></div>`;
+    const center = `<div class="center"><div class="dealer-spot"><div class="deck"></div>${muck}<div class="pot">${potShown > 0 ? `${chipStacks(potShown, s.bb, wide ? 7 : 5, 4)}<span class="amt">Pot ${fmt(potShown)}</span>` : ""}</div></div><div class="board">${board.join("")}</div><div class="result-line"${resLine ? reveal : ""}>${resLine}</div></div>`;
 
     const side = wide ? `<aside class="side"><h3>Odds</h3><div id="sideOdds" style="padding:0 14px 8px"></div><h3>This hand</h3><div class="log scroll" id="sideLog" style="flex:1">${logHTML(s)}</div></aside>` : "";
     el.innerHTML = `<div class="play-wrap">
       <div class="play-main" style="flex:1;display:flex;flex-direction:column;min-height:0">
-        <div class="table-area"><div class="felt"></div>${center}${html}</div>
+        <div class="table-area"><div class="rail"></div><div class="felt tbl-surface tbl-felt-green"><i class="line"></i></div>${center}${html}</div>
         <div class="hud" id="hud"></div>
         <div class="actions-wrap"><div class="actions" id="actions"></div></div>
       </div>${side}</div>`;
+    const deckEl = el.querySelector(".deck");
+    if (root.TABLE) root.TABLE.deck(deckEl, deckLeft, { pattern: "lattice", badge: false });
+    dealFromDeck(deckEl);
     renderHud();
     renderActions();
     updateTop();
     if (plan) TF.run(plan, { dom: { anim: (a) => fxAnim(a, oldBets) }, celebrateOpts: (kind) => ({ colors: FX_COLORS, at: kind === "big" ? el.querySelector(".pot") : null }) });
+  }
+
+  /** Real chip stacks for an amount: one column per colour, the biggest `cols` colours, at most `cap` chips drawn high.
+   *  Chip values follow the blinds, like a real cash table (5/25/100) or a late tournament (25/100/500/1000). */
+  function chipStacks(amount, bb, cap, cols) {
+    const T = root.TABLE;
+    if (!T || amount <= 0) return "";
+    const denoms = bb <= 50 ? [100, 25, 5, 1] : bb <= 400 ? [1000, 500, 100, 25] : [1000, 500, 100];
+    let parts = T.chipBreakdown(amount, denoms);
+    if (!parts.length) parts = [{ v: denoms[denoms.length - 1], n: 1 }];
+    parts = parts.slice(0, cols);
+    return `<span class="tbl-stacks" title="${fmt(amount)}">${parts.map(({ v, n }) => {
+      const k = Math.min(n, cap);
+      let c = "";
+      for (let i = 0; i < k; i++) c += `<span class="tbl-chip v${v}" style="--i:${i}"></span>`;
+      return `<span class="tbl-stack" style="--n:${k}">${c}</span>`;
+    }).join("")}</span>`;
+  }
+  /** The muck: a messy face-down pile (only the top few cards drawn; same tilt every render). */
+  function muckHTML(count, seed) {
+    const T = root.TABLE;
+    if (!T || !count) return `<div class="muck tbl-pile"></div>`;
+    let out = "";
+    for (let i = Math.max(0, count - 6); i < count; i++) {
+      const j = T.jitter(seed, i, { rot: 40, off: 5 });
+      out += `<div class="cd tbl-card back tbl-back tbl-lattice" style="--x:${j.x}px;--y:${j.y}px;--r:${j.r}deg"></div>`;
+    }
+    return `<div class="muck tbl-pile">${out}</div>`;
+  }
+  /** Cards that are being dealt start on top of the deck: measure where the deck is from each card. */
+  function dealFromDeck(deckEl) {
+    const fresh = el.querySelectorAll(".cd.deal, .cd.dealflip");
+    if (!deckEl || !fresh.length) return;
+    const src = deckEl.firstElementChild || deckEl, d = src.getBoundingClientRect();
+    fresh.forEach((c) => { c.style.animationName = "none"; });
+    fresh.forEach((c) => {
+      const r = c.getBoundingClientRect();
+      let dx = d.left + d.width / 2 - (r.left + r.width / 2), dy = d.top + d.height / 2 - (r.top + r.height / 2);
+      // inside a turned hand the move is in the hand's own (turned) frame
+      const h = c.parentElement && c.parentElement.dataset.rot;
+      if (h) { const t = -(+h) * Math.PI / 180; [dx, dy] = [dx * Math.cos(t) - dy * Math.sin(t), dx * Math.sin(t) + dy * Math.cos(t)]; }
+      c.style.setProperty("--dx", Math.round(dx) + "px");
+      c.style.setProperty("--dy", Math.round(dy) + "px");
+    });
+    fresh.forEach((c) => { c.style.animationName = ""; });
   }
 
   // ================================================================ effects (fx.js; transform/opacity only)
@@ -357,8 +443,19 @@
       const pot = el.querySelector(".pot");
       if (pot) (oldBets || []).forEach((o) => ghost(o.html, o.rect, pot, { duration: 360, fade: true, scale: 1 }));
     } else if (a.kind === "fold") {
-      const x = seat(a.seat), h = x && x.querySelector(".hole"), board = el.querySelector(".board");
-      if (h && board && h.children.length) F.flyTo(h, board, { duration: 380, fade: true, scale: 0.6 });
+      // the folded cards slide face down into the muck and leave the player's spot
+      const h = el.querySelector(`.spot[data-seat="${a.seat}"] .hole`) || el.querySelector(`.seat[data-seat="${a.seat}"] .hole`), muck = el.querySelector(".muck");
+      if (h && muck && h.children.length) {
+        const mine = a.seat === 0;
+        const fly = h.cloneNode(true);
+        fly.querySelectorAll(".cd").forEach((c) => { c.className = "cd tbl-card back tbl-back tbl-lattice"; c.innerHTML = ""; c.style.animation = "none"; });
+        const r = h.getBoundingClientRect(), cw = h.firstElementChild.getBoundingClientRect().width;
+        fly.style.setProperty("--w", Math.round(Math.min(cw, 60)) + "px");
+        fly.style.cssText += `;position:fixed;left:${r.left}px;top:${r.top}px;margin:0;pointer-events:none;z-index:40`;
+        if (!mine) h.style.visibility = "hidden";
+        document.body.appendChild(fly);
+        F.flyTo(fly, muck, { duration: 380, clone: false, scale: 0.7 }).then(() => fly.remove());
+      }
     } else if (a.kind === "knock" || a.kind === "allin") {
       const p = plate(a.seat);
       if (p) { F.pop(p); if (a.kind === "allin") F.flash(p, "var(--accent-warm)"); }

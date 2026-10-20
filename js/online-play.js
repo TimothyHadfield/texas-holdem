@@ -9,7 +9,7 @@
   "use strict";
   const { UI, HoldemOnline: HO } = root;
   const { esc, Sheet } = UI;
-  const MODULE_URL = new URL("online.js?v=2", document.currentScript ? document.currentScript.src : location.href).href;
+  const MODULE_URL = new URL("online.js?v=3", document.currentScript ? document.currentScript.src : location.href).href;
   const RESUME_KEY = "online.holdem";
 
   let room = null;      // createOnline() result

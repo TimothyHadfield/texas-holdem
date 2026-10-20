@@ -34,6 +34,21 @@ const eq = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), `${w}: expec
   for (const x of t) { after[x.from] += x.cents; after[x.to] -= x.cents; }
   eq(after, [0, 0, 0, 0, 0], "everyone squared");
 }
+// ---- nothing counted yet: never "everyone is even"; say how far the count is
+{
+  const four = () => [0, 1, 2, 3].map(() => ({ buyIns: 1, chips: 0 }));
+  const r = H.settle(four(), 20, 1000);
+  eq(r.status, "uncounted", "all chips 0 -> not counted yet");
+  eq(H.settleNote(r), "Chips counted: 0 of 4,000 — finish counting", "plain message for an empty count");
+  const blank = H.settle([{ buyIns: 1, chips: "" }, { buyIns: 1, chips: "" }], 20, 1000);
+  eq(blank.status, "uncounted", "blank chips -> not counted yet");
+  const off = H.settle([{ buyIns: 1, chips: 1500 }, { buyIns: 1, chips: 0 }], 20, 1000);
+  eq(off.status, "off", "some chips missing -> off");
+  ok(/1,500 vs 2,000/.test(H.settleNote(off)), "miscount note names both totals: " + H.settleNote(off));
+  const good = H.settle([{ buyIns: 1, chips: 1500 }, { buyIns: 1, chips: 500 }], 20, 1000);
+  eq(good.status, "ok", "full count -> ok");
+  eq(H.settleNote(good), "", "no note when the count matches");
+}
 // ---- ICM
 {
   const v = H.icm([5000, 5000], [70, 30]);

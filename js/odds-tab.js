@@ -32,7 +32,7 @@
       return card(c, (isSel ? "sel " : ""), `data-slot="${g}" data-i="${i}"`);
     };
     const row = (label, g, arr, tail) => `<div class="slot-row"><span class="label">${label}</span><div class="cards">${arr.map((c, i) => slot(g, i, c)).join("")}</div><div class="tail">${tail || ""}</div></div>`;
-    const seenCards = S.seen.map((c, i) => card(c, "", `data-seen="${i}" style="--w:24px"`)).join("");
+    const seenCards = S.seen.map((c, i) => `<span>${card(c, "", `data-seen="${i}" style="--w:24px"`)}</span>`).join("");
     let picker = "";
     for (let s = 3; s >= 0; s--) for (let r = 12; r >= 0; r--) {
       const c = (r << 2) | s;
@@ -51,7 +51,7 @@
         <div class="slots">
           ${row("You", "hero", S.hero, `<button class="btn small ghost" data-clear>Clear</button>`)}
           ${row("Board", "board", S.board)}
-          ${row("Them", "them", S.them, `<span class="label">Seen</span><div class="cards" style="gap:2px">${seenCards}</div><button class="btn small ${S.sel[0] === "seen" ? "primary" : ""}" data-seenadd aria-label="Add a seen card">+</button>`)}
+          ${row("Them", "them", S.them, `<span class="label">Seen</span><div class="seen">${seenCards}</div><button class="btn small ${S.sel[0] === "seen" ? "primary" : ""}" data-seenadd aria-label="Add a seen card">+</button>`)}
         </div>
         <div class="odds-low">
           <div class="picker">${picker}</div>
@@ -69,13 +69,8 @@
     const board = S.board.filter((c) => c >= 0);
     const them = S.them.filter((c) => c >= 0);
     const potOddsHTML = (eq) => {
-      const pot = parseFloat(S.pot), bet = parseFloat(S.bet);
-      let v = "";
-      if (pot > 0 && bet > 0) {
-        const need = bet / (pot + bet);
-        const ev = eq === null ? null : eq * (pot + bet) - bet;
-        v = `<span class="verdict" style="color:${eq === null ? "var(--muted)" : scale(eq - need, -0.15, 0.15)}">Need ${pct(need, 0)}${ev === null ? "" : ev >= 0 ? ` · Call +${ev.toFixed(1)}` : ` · Fold (call ${ev.toFixed(1)})`}</span>`;
-      }
+      const vd = verdict(eq);
+      const v = vd ? `<span class="verdict" style="color:${vd.color}">${esc(vd.text)}</span>` : "";
       return `<div class="potodds"><span class="label">Pot</span><input type="number" inputmode="decimal" min="0" data-f="pot" value="${esc(S.pot)}" placeholder="0"><span class="label">To call</span><input type="number" inputmode="decimal" min="0" data-f="bet" value="${esc(S.bet)}" placeholder="0">${qm("potodds")}${v}</div>`;
     };
     if (hero.length < 2) {
@@ -103,14 +98,57 @@
     extra.innerHTML = potOddsHTML(null);
     clearTimeout(calcT);
     calcT = setTimeout(() => {
-      const r = P.equity({
-        hero, board, dead: S.seen, opponents: S.opp, known: them.length === 2 ? [them] : [],
-        trials: 40000, exactLimit: 900000, seed: 4242,
-      });
+      const r = calcEquity(hero, board, them);
       lastKey = key; lastRes = r;
       show(r);
     }, 20);
   }
+
+  /**
+   * Odds with what we know of one opponent. Two cards: a known hand. One card:
+   * that opponent's hand is partly known — their other card is equally likely
+   * to be any unseen card, so average the known-hand odds over every choice
+   * (exact when each piece is small enough). The total work stays about the
+   * same as a plain run.
+   */
+  function calcEquity(hero, board, them) {
+    const base = { hero, board, dead: S.seen, opponents: S.opp, trials: 40000, exactLimit: 900000, seed: 4242 };
+    if (them.length === 2) return P.equity(Object.assign(base, { known: [them] }));
+    if (them.length !== 1) return P.equity(base);
+    const taken = new Set(hero.concat(board, S.seen, them));
+    const rest = [];
+    for (let c = 0; c < 52; c++) if (!taken.has(c)) rest.push(c);
+    const k = rest.length;
+    const out = { win: 0, tie: 0, lose: 0, equity: 0, n: 0, exact: true };
+    for (const x of rest) {
+      const r = P.equity(Object.assign({}, base, {
+        known: [[them[0], x]], trials: Math.ceil(base.trials / k), exactLimit: Math.floor(base.exactLimit / k), seed: base.seed + x,
+      }));
+      out.win += r.win / k; out.tie += r.tie / k; out.lose += r.lose / k; out.equity += r.equity / k;
+      out.n += r.n; out.exact = out.exact && r.exact;
+    }
+    return out;
+  }
+
+  /** Pot / to-call numbers, or null when blank or not a sane number. */
+  const MAX_CHIPS = 1e9;
+  function money(v) {
+    const x = typeof v === "number" ? v : parseFloat(v);
+    return Number.isFinite(x) && x > 0 && x <= MAX_CHIPS ? x : null;
+  }
+  /** Pot-odds verdict { text, color } for an equity (null = not known yet), or null for no verdict. */
+  function verdict(eq) {
+    const pot = money(S.pot), bet = money(S.bet);
+    if (pot === null || bet === null) return null;
+    const need = bet / (pot + bet);
+    if (eq === null) return { text: `Need ${pct(need, 0)}`, color: "var(--muted)" };
+    const ev = eq * (pot + bet) - bet;
+    return {
+      text: `Need ${pct(need, 0)}` + (ev >= 0 ? ` · Call +${fmtEV(ev)}` : ` · Fold (call ${fmtEV(ev)})`),
+      color: scale(eq - need, -0.15, 0.15),
+    };
+  }
+  const fmtEV = (x) => (Math.abs(x) >= 1000 ? UI.fmt(Math.round(x)) : x.toFixed(1));
 
   function nextEmpty() {
     for (const [g, arr] of groups()) {
@@ -170,16 +208,13 @@
     save();
     // update only the verdict, keep focus in the box (re-rendering would close the keyboard)
     const r = lastRes && JSON.stringify([S.hero.filter((c) => c >= 0), S.board.filter((c) => c >= 0), S.them.filter((c) => c >= 0), S.seen, S.opp]) === lastKey ? lastRes : null;
-    const pot = parseFloat(S.pot), bet = parseFloat(S.bet);
     const box = e.target.closest(".potodds");
     let v = box.querySelector(".verdict");
-    if (!(pot > 0 && bet > 0)) { if (v) v.remove(); return; }
+    const vd = verdict(!r || S.hero.includes(-1) ? null : r.equity);
+    if (!vd) { if (v) v.remove(); return; }
     if (!v) { v = document.createElement("span"); v.className = "verdict"; box.appendChild(v); }
-    const need = bet / (pot + bet);
-    if (!r || S.hero.includes(-1)) { v.textContent = `Need ${pct(need, 0)}`; v.style.color = "var(--muted)"; return; }
-    const ev = r.equity * (pot + bet) - bet;
-    v.textContent = `Need ${pct(need, 0)}` + (ev >= 0 ? ` · Call +${ev.toFixed(1)}` : ` · Fold (call ${ev.toFixed(1)})`);
-    v.style.color = scale(r.equity - need, -0.15, 0.15);
+    v.textContent = vd.text;
+    v.style.color = vd.color;
   }
 
   // -------------------------------------------------------------- chart
@@ -198,7 +233,7 @@
     if (chartSel !== null) {
       const cls = P.CLASSES[chartSel];
       const top = root.Bots.PCT[chartSel];
-      info = `<div style="text-align:center"><b style="font-size:18px">${cls}</b> · wins <b>${pct(PREFLOP[chartSel][n - 1])}</b> vs ${n} · top <b>${pct(top, 0)}</b> of hands${qm("chart")}
+      info = `<div style="text-align:center"><b style="font-size:18px">${cls}</b> · wins <b>${pct(PREFLOP[chartSel][n - 1])}</b> vs ${n} · top <b>${pct(top, top < 0.01 ? 1 : 0)}</b> of hands${qm("chart")}
         <div class="subnums" style="justify-content:center;margin-top:4px">${PREFLOP[chartSel].map((e, k) => `<span>${k + 1}: <b>${(e * 100).toFixed(0)}%</b></span>`).join("")}</div></div>`;
     }
     el.innerHTML = `

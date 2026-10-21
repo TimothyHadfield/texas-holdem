@@ -31,3 +31,9 @@
 - **Built:** shared table kit copied (`js/table.js`, `css/table.css`), fx.js re-copied at 1.0.3 (`data-fxspeed`, app.js workaround removed). Cards rewritten (jumbo index, real pips, courts, lattice backs); felt/rail/betting line; deck that shrinks, muck, chip stacks, bets, pot chips, dealer puck; deal-from-deck + 3-D flip, fold to muck. Your seat pinned to the bottom edge.
 - **Verified:** `npm test` (76/21/114/36/55/34); phone-view 393 + desktop for 5 states (before/after); matrix at 320, 393, 659 landscape, 1280: zero errors, no scroll, overflow only where v1.3.0 already had it; deal filmstrip; Effects speed fast leaves Computer speed normal; two-browsers online 3 hands, boards match, zero errors. Live at 0624b71.
 - **Open:** the independent reviewer sub-agent couldn't start (sub-agent limit); real iPhone look.
+
+## 2026-10-20 — weird-scenario pass (v1.4.1)
+- **Asked (Tim, via manager):** make each game perfect in scenarios it doesn't expect (words in progress.md). Plus the table-look reviewer that never ran, and the 320 px plate / landscape felt overflow.
+- **Built:** reviewer (read-only) run; 46 scenarios listed and tested; fixes in play.js (keepOnScreen layout guard, tap guard, online one-move-per-decision, no re-deal on reload, emoji avatar, log scroll, sync between tabs, results sheet), app.js (Back walks tabs, storage sync), engine.js (equal-stack busts tie, rules-check row 26), style.css (compact plates, landscape side column, header truncation).
+- **Verified:** `npm test` 79/21/118/36/55/34 on main; new engine tests seen failing first; behave.mjs 15/15 and layout.mjs (8 fixtures x 6 sizes) against the live site at b568145.
+- **Open:** iPhone SE landscape with 9 players still crowded; reviewer look items left for Tim (progress.md NOT verified).

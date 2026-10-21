@@ -20,7 +20,7 @@ const testSrc = ["engine.test.js", "poker.test.js", "home.test.js"]
 
 // --- rule rows: | n | rule | sources | `test name` |
 const rows = doc.split("\n").filter((l) => /^\|\s*\d+\s*\|/.test(l));
-eq(rows.length, 25, "number of rules in the doc");
+eq(rows.length, 26, "number of rules in the doc");
 rows.forEach((l, i) => {
   const n = +l.split("|")[1];
   ok(n === i + 1, `rule ${i + 1} is numbered ${n}`);

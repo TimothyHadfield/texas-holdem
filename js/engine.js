@@ -395,12 +395,20 @@
     s.street = "done";
     s.toAct = -1;
     s.hand += 1;
-    // Busted players: in a tournament they finish in order (ties share the better place by chips put in).
+    // Busted players: in a tournament they finish in order.
     const busted = s.seats.filter((p) => !p.out && p.stack === 0);
     if (s.cfg.format === "tourney" && busted.length) {
-      // Busted in the same hand: whoever started the hand with fewer chips finishes lower (TDA).
+      // Busted in the same hand: whoever started the hand with fewer chips finishes lower;
+      // the same starting stack = a tie for the better of their places (TDA, Robert's Rules).
       busted.sort((a, b) => a.total - b.total);
-      for (const p of busted) { p.out = true; p.place = s.nextPlace--; }
+      for (let k = 0; k < busted.length;) {
+        let j = k;
+        while (j < busted.length && busted[j].total === busted[k].total) j++;
+        const place = s.nextPlace - (j - k) + 1;
+        for (let m = k; m < j; m++) { busted[m].out = true; busted[m].place = place; }
+        s.nextPlace -= j - k;
+        k = j;
+      }
       const left = s.seats.filter((p) => !p.out);
       if (left.length === 1) { s.over = true; s.winner = left[0].i; left[0].place = 1; }
     }

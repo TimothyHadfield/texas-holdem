@@ -61,6 +61,7 @@ Checked 2026-10-19.
 | 23 | Best five of seven cards; the ace plays high or low (A-2-3-4-5 straight) | PG, WP | `wheel is the lowest straight` |
 | 24 | Hand ranks: straight flush > quads > full house > flush > straight > trips > two pair > pair > high card | PG, WP | `flush beats straight` |
 | 25 | Tournament: blinds rise by level; the last player with chips wins | TDA, WSOP | `tournament finishes` |
+| 26 | Tournament: two players out in the same hand finish by starting stack; the same stack ties for the place | TDA (players busting at the same time), WSOP | `same-hand busts with equal starting stacks tie for 3rd` |
 
 ## Simplifications and house choices (said honestly)
 

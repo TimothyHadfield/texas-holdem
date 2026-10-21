@@ -250,7 +250,9 @@ function rig(s, holes, board) {
     if (s.hand === 2 && s.street === "done") { const t = A(s, { type: "deal" }); eq(t.bb, 30, "level 2 after 2 hands"); }
   }
   ok(s.over, "tournament finishes");
-  eq(s.seats.map((p) => p.place).sort(), [1, 2, 3], "places 1-3 assigned");
+  const pl = s.seats.map((p) => p.place).sort();
+  // two busting in one hand with the same stack tie for 2nd ([1, 2, 2]); otherwise [1, 2, 3]
+  ok(JSON.stringify(pl) === "[1,2,3]" || JSON.stringify(pl) === "[1,2,2]", "places 1-3 assigned: " + pl);
   eq(s.seats[s.winner].stack, 900, "winner holds every chip");
 }
 
@@ -268,6 +270,29 @@ function rig(s, holes, board) {
   eq([s.seats[0].out, s.seats[1].out], [true, true], "both short stacks bust");
   eq(s.seats[0].place, 3, "same-hand busts: bigger starting stack (900) finishes 3rd");
   eq(s.seats[1].place, 4, "same-hand busts: smaller starting stack (300) finishes 4th");
+}
+
+// ------------------------------------------------ two bust in one hand with the same stack: they tie for the place
+{
+  let s = game(4, { format: "tourney", startStack: 1000 });
+  s.seats[0].stack = 500; s.seats[1].stack = 500; s.seats[2].stack = 2000; s.seats[3].stack = 2000;
+  s.button = 3;
+  s = rig(s, [C("7c 2d"), C("8c 3d"), C("Ac Ad"), C("Kc Kd")], C("As Ah 9s 5h 4c"));
+  let g = 0;
+  while (s.street !== "done" && g++ < 20) {
+    const L = E.legal(s);
+    s = A(s, s.toAct <= 1 ? { type: "allin" } : L.canCheck ? { type: "check" } : { type: "call" });
+  }
+  eq([s.seats[0].out, s.seats[1].out], [true, true], "both equal short stacks bust");
+  eq([s.seats[0].place, s.seats[1].place], [3, 3], "same-hand busts with equal starting stacks tie for 3rd");
+  // the next one out finishes 2nd, the winner 1st
+  s.seats[3].stack += s.seats[2].stack - 1; s.seats[2].stack = 1;
+  g = 0;
+  while (!s.over && g++ < 200) {
+    if (s.street === "done") { s = A(s, { type: "deal" }); continue; }
+    s = A(s, E.legal(s).canCheck ? { type: "check" } : { type: "call" });
+  }
+  eq(s.seats.map((p) => p.place).sort(), [1, 2, 3, 3], "places after a tie: 1, 2, 3, 3");
 }
 
 // ------------------------------------------------ "all in" in pot limit is capped at the pot

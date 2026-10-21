@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   const { UI } = root;
-  const VERSION = "1.4.0 (2026-10-20)";
+  const VERSION = "1.4.1 (2026-10-20)";
   const TITLES = { odds: "Odds", study: "Study", play: "Hold'em", home: "Home game", settings: "Settings" };
 
   // Measured strengths (tools/measure.js) — shown behind the "How strong?" ?
@@ -25,8 +25,11 @@
   void STRENGTH;
 
   const inited = {};
-  function go(tab) {
+  function go(tab, fromBack) {
     const d = UI.Store.data;
+    // the phone's Back goes to the tab you were just on
+    if (!fromBack && d.tab !== tab && inited.any) { try { history.pushState({ tab }, ""); } catch (e) { /* ignore */ } }
+    inited.any = 1;
     d.tab = tab;
     UI.Store.save();
     document.querySelectorAll("nav.tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
@@ -104,5 +107,20 @@
     fx();
   }
   root.App = { go, VERSION };
+  try { history.replaceState({ tab: UI.Store.data.tab || "play" }, ""); } catch (e) { /* ignore */ }
+  root.addEventListener("popstate", (e) => {
+    UI.Sheet.close();
+    const tab = e.state && e.state.tab;
+    if (tab && TITLES[tab]) go(tab, true);
+  });
+  // another tab of this site saved: follow it (keep this tab's own screen)
+  root.addEventListener("storage", (e) => {
+    if (e.key !== "holdem:v1" || !e.newValue) return;
+    const tab = UI.Store.data.tab;
+    UI.Store.load();
+    UI.Store.data.tab = tab;
+    applySettings();
+    if (inited.play) root.PlayTab.sync();
+  });
   go(UI.Store.data.tab || "play");
 })(this);

@@ -133,6 +133,7 @@
     if (!room) return;
     const r = await room.act(a);
     if (r && !r.ok && a.type !== "deal") { UI.toast(r.message || "That move didn't go through"); if (root.FX) root.FX.play("error"); }
+    return r;
   }
 
   async function leave() {

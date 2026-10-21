@@ -23,6 +23,9 @@
   let onlineScreen = null;    // null | "start" | lobby snapshot
   const TF = root.TableFX;    // sounds + animations (table-fx.js, fx.js)
   let fxPrev = null;          // the state the last sounds were planned from (TF.SETUP = setup screen)
+  let actReadyAt = 0;         // a fresh decision ignores taps for a moment (a double tap must not act twice)
+  let sentKey = "";           // online: the decision whose move is on its way to the server
+  const TAP_GUARD_MS = 350;
 
   function init(container) {
     el = container;
@@ -157,7 +160,16 @@
   function heroAct(a) {
     const s = S();
     if (s.toAct !== 0) return;
-    if (G.online) { root.OnlinePlay.act(a); return; }
+    if (G.online) {
+      // one move per decision while it travels to the server (a second tap would be refused as "not your turn")
+      const k = `${s.hand}-${s.log.length}`;
+      if (sentKey === k) return;
+      sentKey = k;
+      const clear = () => { if (sentKey === k) sentKey = ""; };
+      setTimeout(clear, 8000);
+      Promise.resolve(root.OnlinePlay.act(a)).then((r) => { if (!r || !r.ok) clear(); }, clear);
+      return;
+    }
     const L = E.legal(s);
     const opp = s.seats.filter((p) => p.i !== 0 && !p.folded).length;
     let next;
@@ -225,7 +237,7 @@
     let x = 50 + rx * Math.cos(a), y = 49 + ry * Math.sin(a);
     if (hero) y += wide ? 1 : 2;
     // phone: keep the outermost name plates on screen (plate is 82 px wide)
-    const pad = W ? Math.max(12, (43 / W) * 100) : 12;
+    const pad = W ? Math.max(12, ((W < 360 ? 38 : 43) / W) * 100) : 12;
     if (!wide) x = Math.max(pad, Math.min(100 - pad, x));
     return [x, y];
   }
@@ -244,8 +256,10 @@
     let html = "";
     // what changed since the last state drawn -> sounds, animations, card timing
     let plan = null;
+    // first paint after a reload: the cards are already on the table, so nothing is dealt again
+    const restored = fxPrev === null;
     if (TF && fxPrev !== s) {
-      if (UI.Store.data.tab === "play") plan = TF.plan(fxPrev, s, 0);
+      if (UI.Store.data.tab === "play" && !document.hidden) plan = TF.plan(fxPrev, s, 0);
       fxPrev = s;
     }
     const K = TF ? TF.delayK() : 1;
@@ -260,7 +274,9 @@
     // seats whose fold is animated right now keep their cards one more frame, so they can fly to the muck
     const foldingNow = new Set(plan && K ? plan.anims.filter((a) => a.kind === "fold").map((a) => a.seat) : []);
     // table box in px (for turning each player's cards to face them)
-    const W = Math.max(280, el.clientWidth - (wide ? 340 : 0)), H = Math.max(240, el.clientHeight - 170);
+    const ta0 = el.querySelector(".table-area");
+    const W = ta0 && ta0.clientWidth > 100 ? ta0.clientWidth : Math.max(280, el.clientWidth - (wide ? 340 : 0));
+    const H = ta0 && ta0.clientHeight > 100 ? ta0.clientHeight : Math.max(240, el.clientHeight - 170);
     s.seats.forEach((p, k) => {
       const [x, y] = seatXY(k, n, k === 0, W);
       const hero = k === 0;
@@ -270,7 +286,7 @@
       const keepCards = hero || !p.folded || foldingNow.has(p.i);
       const cards = p.hole.length && keepCards ? p.hole.map((c, j) => {
         const key = `${s.hand}-${p.i}-${j}${showCards ? "f" : ""}`;
-        const isNew = !seen.has(key);
+        const isNew = !seen.has(key) && !restored;
         seen.add(key);
         const cls = (p.folded ? "dim " : "") + (isNew ? (showCards && !hero ? "flip" : hero ? "dealflip" : "deal") : "");
         const delay = !isNew ? 0 : showCards && !hero ? flip0 : (TF ? deal0 + (j * n + k) * 45 : (j * n + k) * 45);
@@ -282,7 +298,7 @@
       else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag sd"${reveal}>${esc(short(s.result.names[p.i]))}</span>`;
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
-      const cls = ["seat", hero ? "hero" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
+      const cls = ["seat", hero ? "hero" : "", !hero && x > 60 ? "rt" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
       // your chips: a real stack beside your cards (the number stays on the plate)
       const shownStack = p.out ? 0 : p.stack - (counting[p.i] || 0);
       // (a phone with 7+ players has no room for everyone's stack: the number on the plate stays)
@@ -290,7 +306,7 @@
       const level = Math.abs(y - 47) < 14 && Math.abs(x - 50) > 30; // seats at the ends, level with the board
       html += `<div class="${cls}" data-seat="${p.i}" style="left:${x}%;top:${y}%">
         ${hero ? `<div class="hole">${cards}</div>${myStack ? `<div class="stk mine">${myStack}</div>` : ""}` : ""}
-        <div class="plate">${tag}<span class="av" style="--lv:${LEVEL_COLOR[lvl] || "#999"}">${esc(p.name[0])}</span>
+        <div class="plate">${tag}<span class="av" style="--lv:${LEVEL_COLOR[lvl] || "#999"}">${esc(Array.from(p.name || "?")[0] || "?")}</span>
           <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(shownStack)}</div></span></div>
         ${s.toAct === p.i && p.kind === "bot" ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
         ${hero && p.i === s.button ? `<div class="dealer"><span>${wide ? "DEALER" : "D"}</span></div>` : ""}
@@ -336,7 +352,7 @@
       const c = s.board[i];
       if (c === undefined) { board.push(card(-1)); continue; }
       const key = `${s.hand}-b${i}`;
-      const isNew = !seen.has(key);
+      const isNew = !seen.has(key) && !restored;
       seen.add(key);
       const win = s.street === "done" && s.result && !s.result.byFold;
       const bd = !isNew ? 0 : plan && plan.board[i] !== undefined ? plan.board[i] : (i < 3 ? i * 90 : 0);
@@ -357,7 +373,7 @@
 
     const side = wide ? `<aside class="side"><h3>Odds</h3><div id="sideOdds" style="padding:0 14px 8px"></div><h3>This hand</h3><div class="log scroll" id="sideLog" style="flex:1">${logHTML(s)}</div></aside>` : "";
     el.innerHTML = `<div class="play-wrap">
-      <div class="play-main" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="play-main">
         <div class="table-area"><div class="rail"></div><div class="felt tbl-surface tbl-felt-green"><i class="line"></i></div>${center}${html}</div>
         <div class="hud" id="hud"></div>
         <div class="actions-wrap"><div class="actions" id="actions"></div></div>
@@ -365,10 +381,62 @@
     const deckEl = el.querySelector(".deck");
     if (root.TABLE) root.TABLE.deck(deckEl, deckLeft, { pattern: "lattice", badge: false });
     dealFromDeck(deckEl);
+    keepOnScreen();
+    requestAnimationFrame(keepOnScreen); // again once fonts and the result line are laid out (it only moves what still collides)
     renderHud();
     renderActions();
     updateTop();
+    const logEl = el.querySelector("#sideLog");
+    if (logEl) logEl.scrollTop = logEl.scrollHeight; // the latest action is always in view
     if (plan) TF.run(plan, { dom: { anim: (a) => fxAnim(a, oldBets) }, celebrateOpts: (kind) => ({ colors: FX_COLORS, at: kind === "big" ? el.querySelector(".pot") : null }) });
+  }
+
+  /** Long names, big numbers or a narrow screen can push an end seat's name plate (and its tag) past the edge:
+   *  slide that seat back inside the table area. */
+  function keepOnScreen() {
+    const ta = el.querySelector(".table-area");
+    if (!ta) return;
+    const r = ta.getBoundingClientRect(), pad = 2;
+    if (!r.width) return;
+    el.querySelectorAll(".table-area .seat:not(.hero)").forEach((seat) => {
+      let L = Infinity, R = -Infinity, T = Infinity;
+      for (const e of seat.querySelectorAll(".plate, .tag")) {
+        const q = e.getBoundingClientRect();
+        if (!q.width) continue;
+        L = Math.min(L, q.left); R = Math.max(R, q.right); T = Math.min(T, q.top);
+      }
+      if (L === Infinity) return;
+      const dx = L < r.left + pad ? r.left + pad - L : R > r.right - pad ? r.right - pad - R : 0;
+      const dy = T < r.top + pad ? r.top + pad - T : 0;
+      if (dx) seat.style.left = `calc(${seat.style.left} + ${Math.round(dx)}px)`;
+      if (dy) seat.style.top = `calc(${seat.style.top} + ${Math.round(dy)}px)`;
+    });
+    // a crowded small table: bets clear of the pot and of each other, turned-up cards clear of the result line
+    const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+    const cy = r.top + r.height * 0.47;
+    const away = (node, box, obstacle) => {
+      if (!hit(box, obstacle)) return;
+      const down = box.top + box.height / 2 > obstacle.top + obstacle.height / 2;
+      const d = down ? obstacle.bottom - box.top + 2 : obstacle.top - box.bottom - 2;
+      node.style.transition = "none";
+      node.style.top = `calc(${node.style.top} + ${Math.round(d)}px)`;
+    };
+    const pot = el.querySelector(".table-area .pot .amt");
+    const placed = pot ? [pot.getBoundingClientRect()] : [];
+    Array.from(el.querySelectorAll(".table-area .seatbet"))
+      .sort((a, b) => Math.abs(a.getBoundingClientRect().top - cy) - Math.abs(b.getBoundingClientRect().top - cy))
+      .forEach((b) => {
+        const chips = b.querySelector(".bet");
+        if (!chips) return;
+        for (let pass = 0; pass < 3; pass++) for (const o of placed) away(b, chips.getBoundingClientRect(), o);
+        placed.push(chips.getBoundingClientRect());
+      });
+    const res = el.querySelector(".table-area .result-line");
+    if (res && res.textContent.trim()) {
+      const rg = document.createRange(); rg.selectNodeContents(res);
+      const tr = rg.getBoundingClientRect();
+      el.querySelectorAll(".table-area .spot").forEach((sp) => { const h = sp.querySelector(".hole"); if (h && h.children.length) away(sp, h.getBoundingClientRect(), tr); });
+    }
   }
 
   /** Real chip stacks for an amount: one column per colour, the biggest `cols` colours, at most `cap` chips drawn high.
@@ -510,7 +578,8 @@
     for (const e of s.log) {
       if (e.seat === -1) { out += `<div class="st">${e.type[0].toUpperCase() + e.type.slice(1)} ${e.cards.slice(e.type === "flop" ? 0 : -1).map(UI.cardText).join(" ")}</div>`; continue; }
       const who = esc(s.seats[e.seat].name);
-      const you = e.seat === 0 && s.seats[0].kind === "human";
+      const you = e.seat === 0 && s.seats[0].name === "You"; // online your seat carries your own name: "Tim calls"
+
       const v = (w) => (you ? w : w === "raise" ? "raises" : w + "s"); // "You call" / "Ada calls"
       const what = e.type === "sb" ? `${v("post")} small blind ${e.amount}` : e.type === "bb" ? `${v("post")} big blind ${e.amount}` : e.type === "ante" ? `${v("ante")} ${e.amount}` :
         e.type === "raise" ? `${v("raise")} to ${fmt(e.to)}` : e.type === "bet" ? `${v("bet")} ${fmt(e.to)}` : e.type === "call" ? `${v("call")} ${fmt(e.amount)}` : v(e.type);
@@ -586,7 +655,7 @@
     let sizer = `<span class="muted" style="font-size:13px">${mine ? "" : s.seats[0].folded ? "Waiting for the hand to finish…" : "Waiting…"}</span>`;
     // a fresh decision gets a fresh default size (never carry the last one over)
     const decKey = `${s.cfg.seed}-${s.hand}-${s.log.length}`;
-    if (mine && decKey !== sizerKey) { sizerKey = decKey; sizerTo = 0; }
+    if (mine && decKey !== sizerKey) { sizerKey = decKey; sizerTo = 0; actReadyAt = Date.now() + TAP_GUARD_MS; }
     if (mine && L.canRaise && L.maxTo > L.minTo) {
       if (sizerTo < L.minTo || sizerTo > L.maxTo) sizerTo = defaultSize(s, L);
       const pre = (f, t) => `<button class="btn small" data-size="${f}">${t}</button>`;
@@ -617,7 +686,7 @@
     if (!G || !G.state) { t.innerHTML = ""; return; }
     const s = S();
     const fmtName = { nl: "No limit", pl: "Pot limit", fl: "Limit" }[s.cfg.betting];
-    t.innerHTML = `${G.online && root.OnlinePlay.snap ? `<b class="ocode-top">${esc(root.OnlinePlay.snap.code || "")}</b> · ` : ""}${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""} <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
+    t.innerHTML = `<span class="ti">${G.online && root.OnlinePlay.snap ? `<b class="ocode-top">${esc(root.OnlinePlay.snap.code || "")}</b> · ` : ""}${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""}</span> <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
   }
 
   // ================================================================ events
@@ -657,6 +726,7 @@
     if (b.dataset.act) {
       const s = S(), L = E.legal(s);
       if (!L) return;
+      if (Date.now() < actReadyAt) return; // the tap that ended the last decision, landing on this one
       if (b.dataset.act === "fold") heroAct({ type: "fold" });
       else if (b.dataset.act === "call") heroAct({ type: L.canCheck ? "check" : "call" });
       else heroAct(sizerTo >= L.bet + L.stack ? { type: "allin" } : { type: "raise", to: sizerTo || L.minTo });
@@ -736,12 +806,14 @@
     const s = S();
     const place = s.seats[0].place;
     Sheet.open(`<h3>You finished ${ordinal(place)} of ${s.seats.length}</h3><p>Play out the rest instantly to see who wins?</p>
-      <div class="row"><button class="btn ghost" data-close>Close</button><button class="btn primary" data-close data-finish>Finish it</button></div>`, (body) => {
+      <div class="row"><button class="btn ghost" data-close>Close</button><button class="btn primary" data-finish>Finish it</button></div>`, (body) => {
       body.querySelector("[data-finish]").addEventListener("click", finishTourney);
     });
   }
 
   function finishTourney() {
+    // (no data-close on the button: the page's close-on-tap would shut the results sheet opened below)
+    Sheet.close();
     let s = S();
     let guard = 0;
     while (!s.over && guard++ < 5000) {
@@ -752,6 +824,7 @@
     }
     G.recorded = true;
     setState(s);
+    if (!s.over || s.winner < 0) return;
     const order = s.seats.slice().sort((a, b) => a.place - b.place);
     Sheet.open(`<h3>${esc(s.seats[s.winner].name)} won</h3>${order.map((p) => `<p>${ordinal(p.place)} · ${esc(p.name)}${p.level ? ` <span class="muted">(${p.level})</span>` : ""}</p>`).join("")}<div class="row"><button class="btn primary" data-close>OK</button></div>`);
   }
@@ -761,5 +834,15 @@
     if (e.target.closest("[data-oleaveask]")) root.OnlinePlay.confirmLeave();
   });
 
-  root.PlayTab = { init, render: () => { render(); }, newGame, setOnline };
+  /** Another tab of this site changed the saved game: show that one (never two games fighting over one save). */
+  function sync() {
+    if (!el || (G && G.online)) return;
+    clearTimeout(timer); gen++;
+    G = UI.Store.data.game;
+    hintText = "";
+    render();
+    schedule();
+  }
+
+  root.PlayTab = { init, render: () => { render(); }, newGame, setOnline, sync };
 })(this);

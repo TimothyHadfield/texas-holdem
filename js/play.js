@@ -368,6 +368,7 @@
       if (side > 0) resLine += ` · ${side} side pot${side > 1 ? "s" : ""}`;
     }
     if (s.over && s.winner >= 0) resLine = `<b>${esc(s.seats[s.winner].name)} won the tournament</b>` + (resLine ? `<br>${resLine}` : "");
+    resNow = resLine;
     const potShown = s.street === "done" ? r0(s) : pot;
     const center = `<div class="center"><div class="dealer-spot"><div class="deck"></div>${muck}<div class="pot">${potShown > 0 ? `${chipStacks(potShown, s.bb, wide ? 7 : 5, 4)}<span class="amt">Pot ${fmt(potShown)}</span>` : ""}</div></div><div class="board">${board.join("")}</div><div class="result-line"${resLine ? reveal : ""}>${resLine}</div></div>`;
 
@@ -398,6 +399,15 @@
     if (!ta) return;
     const r = ta.getBoundingClientRect(), pad = 2;
     if (!r.width) return;
+    // an action tag that would sit on the board moves to the plate's outer corner
+    const bd = el.querySelector(".table-area .board");
+    if (bd) {
+      const b = bd.getBoundingClientRect();
+      el.querySelectorAll(".table-area .seat:not(.hero) .tag:not(.sd)").forEach((t) => {
+        const q = t.getBoundingClientRect();
+        if (Math.min(q.right, b.right) - Math.max(q.left, b.left) > 0 && Math.min(q.bottom, b.bottom) - Math.max(q.top, b.top) > 0) t.classList.add("flip");
+      });
+    }
     el.querySelectorAll(".table-area .seat:not(.hero)").forEach((seat) => {
       let L = Infinity, R = -Infinity, T = Infinity;
       for (const e of seat.querySelectorAll(".plate, .tag")) {
@@ -421,22 +431,44 @@
       node.style.transition = "none";
       node.style.top = `calc(${node.style.top} + ${Math.round(d)}px)`;
     };
-    const pot = el.querySelector(".table-area .pot .amt");
-    const placed = pot ? [pot.getBoundingClientRect()] : [];
-    Array.from(el.querySelectorAll(".table-area .seatbet"))
-      .sort((a, b) => Math.abs(a.getBoundingClientRect().top - cy) - Math.abs(b.getBoundingClientRect().top - cy))
-      .forEach((b) => {
-        const chips = b.querySelector(".bet");
-        if (!chips) return;
-        for (let pass = 0; pass < 3; pass++) for (const o of placed) away(b, chips.getBoundingClientRect(), o);
-        placed.push(chips.getBoundingClientRect());
-      });
+    void away; void cy;
+    // a crowded table: each player's cards, then each bet, slide the shortest way to a clear spot on the table
+    const rects = (sel) => Array.from(el.querySelectorAll(sel)).map((e) => e.getBoundingClientRect()).filter((q) => q.width);
+    const fixed = [...rects(".table-area .plate"), ...rects(".table-area .seat .tag"), ...rects(".table-area .board"), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot")];
     const res = el.querySelector(".table-area .result-line");
-    if (res && res.textContent.trim()) {
-      const rg = document.createRange(); rg.selectNodeContents(res);
-      const tr = rg.getBoundingClientRect();
-      el.querySelectorAll(".table-area .spot").forEach((sp) => { const h = sp.querySelector(".hole"); if (h && h.children.length) away(sp, h.getBoundingClientRect(), tr); });
-    }
+    if (res && res.textContent.trim()) { const rg = document.createRange(); rg.selectNodeContents(res); fixed.push(rg.getBoundingClientRect()); }
+    const placed = [];
+    // stay on the felt (its box, a little inside the rail)
+    const f0 = el.querySelector(".table-area .felt").getBoundingClientRect();
+    const fr = { left: f0.left + 2, right: f0.right - 2, top: f0.top + 2, bottom: f0.bottom - 2 };
+    const settle = (node, box) => {
+      const shift = (q, dx, dy) => ({ left: q.left + dx, right: q.right + dx, top: q.top + dy, bottom: q.bottom + dy });
+      const over = (q) => { let a = 0; for (const o of fixed.concat(placed)) if (hit(q, o)) a += (Math.min(q.right, o.right) - Math.max(q.left, o.left)) * (Math.min(q.bottom, o.bottom) - Math.max(q.top, o.top)); return a; };
+      if (!over(box)) return box;
+      let best = null;
+      for (let d = 3; d <= 30 &&!(best && best.a === 0); d += 3) {
+        for (const [dx, dy] of [[0, d], [0, -d], [d, 0], [-d, 0], [d, d], [-d, d], [d, -d], [-d, -d]]) {
+          const q = shift(box, dx, dy);
+          if (q.left < fr.left || q.right > fr.right || q.top < fr.top || q.bottom > fr.bottom) continue;
+          const a = over(q);
+          if (!best || a < best.a) best = { a, dx, dy, q };
+          if (a === 0) break;
+        }
+      }
+      if (!best || best.a >= over(box)) return box;
+      node.style.transition = "none";
+      node.style.left = `calc(${node.style.left} + ${best.dx}px)`;
+      node.style.top = `calc(${node.style.top} + ${best.dy}px)`;
+      return best.q;
+    };
+    el.querySelectorAll(".table-area .spot").forEach((sp) => {
+      const h = sp.querySelector(".hole");
+      if (h && h.children.length) placed.push(settle(sp, h.getBoundingClientRect()));
+    });
+    Array.from(el.querySelectorAll(".table-area .seatbet")).forEach((b) => {
+      const chips = b.querySelector(".bet");
+      if (chips) placed.push(settle(b, chips.getBoundingClientRect()));
+    });
   }
 
   /** Real chip stacks for an amount: one column per colour, the biggest `cols` colours, at most `cap` chips drawn high.
@@ -602,6 +634,7 @@
     return r;
   }
 
+  let resNow = "";
   function renderHud() {
     const hud = el.querySelector("#hud");
     const s = S();
@@ -622,7 +655,8 @@
         ${need !== null ? `<span>Need <b>${pct(need, 0)}</b></span>` : `<span class="hname">${esc(name)}</span>`}`;
     } else if (s.street === "done") {
       const net = s.seats[0].stack - (G.startStacks[0] || 0);
-      html = `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
+      // phone on its side: the table has no room under the board, so who won goes here (CSS shows it only there)
+      html = (resNow ? `<div class="hud-res">${resNow}</div>` : "") + `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
     } else html = `<span class="hname">${me.folded ? "You folded" : esc(name)}</span>`;
     if (set.hints && s.toAct === 0 && !hintText) html += `<button class="btn small" data-hint>Hint</button>`;
     hud.innerHTML = html;

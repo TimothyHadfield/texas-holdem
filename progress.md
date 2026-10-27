@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-27 (visibility pass; v1.4.2).
+Last updated: 2026-10-27 (improvement pass; v1.5.0).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -22,6 +22,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Real-table look (2026-10-20, v1.4.0) | Done: seen from your seat. Felt + leather rail + wood ring + betting line (stadium shape on laptop); jumbo-index 63:88 cards with real pip layouts (full face from 46 px wide) and blue lattice backs; deck by the pot shrinks as cards are dealt; messy muck takes folds and burns; clay chip stacks in front of everyone, bets pushed toward the line, pot chips; dealer puck. Cards fly from the deck and turn in 3-D; folds fly to the muck. Research in the manager's scratchpad `table/texas-holdem/real.md`, before/after shots in `before/` and `after/` there |
 | Weird-scenario pass (2026-10-20, v1.4.1) | Done: 46 scenarios, 22 fixed (see "Edge pass" below). Live at b568145 |
 | Visibility pass (2026-10-27, v1.4.2) | Done: card indices ~30% bigger (opponents' showdown index 9.7 -> 12.4 px, phone board 13.4 -> 18.8 px), phone board 37 -> 41 px, sideways phone: slimmer bars + winner line in the column (felt 24% -> 29% of screen), weighted clear-spot search in keepOnScreen. Overlap failures 40 -> 8 of 66 shots. Shots + audit.mjs in the manager's scratchpad `vis/texas-holdem/` |
+| Improvement pass (2026-10-27, v1.5.0) | Done: guided first game (`js/coach-holdem.js`, seed 416 = you hold A-K) + Rules sheet (Settings → Learn, Menu → Rules); My stats / achievements / Daily game (`js/profile-holdem.js`; rated unless Hint/Undo used; cash counts at 10+ hands); Undo (HUD button, Settings switch) and Replay last hand (done row), both rebuilt from `G.pre`; offline/install kit (`js/pwa.js`, `sw.js`, manifest, icons; pwa-check 18/18); limit Hard rewritten (`hardLimit` in bots.js). improve.test 620 |
 | Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)
@@ -45,10 +46,13 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Layout guard: `keepOnScreen()` in play.js runs after every render (and again next frame): seats back on screen, then your stack, each player's cards, each bet and the dealer button slide to the cheapest nearby spot (cost = covered area, x3 for plates/tags/board/result line/already placed items, + off-felt and rail-corner penalties, + 3 per px moved). Tune the weights there, and re-run `audit.mjs` (manager scratchpad `vis/texas-holdem/`, serve on your own port with `--bind 127.0.0.1`: port 47613 was shared with another process on 10-27). Measure the real `.table-area` size, not an estimate. Compact plates kick in under 360 px wide and in phone landscape (max-height 520).
 - Taps on action buttons are ignored for 350 ms after a new decision appears (`TAP_GUARD_MS`); online, one move per decision is sent until the server answers or 8 s pass.
 - Edge-pass test scripts (behave.mjs, layout.mjs, fixtures.js) live in the manager's scratchpad `edge/texas-holdem/`; serve with `python -m http.server <port> --directory <folder>` (a bare port can hit another builder's server).
-- Measuring strength takes minutes: `node tools/measure.js` (see the file header for options).
+- Measuring strength takes minutes: `node tools/measure.js` (see the file header for options). Head-to-head: `node tools/sng.js [pairs] [nl|pl|fl] [a] [b]` (heads-up tournaments, the target metric) and `node tools/match.js` (100-hand matches); `BOTS=<file>` swaps in another bots.js to compare.
+- `js/coach.js`, `css/coach.css`, `js/profile.js`, `css/profile.css`, `js/pwa.js`, `sw.js`, `tools/pwa-check.mjs`, `tools/make-icons.mjs` are unchanged kit copies (marked `-text` in .gitattributes). Bump `?v=` and pwa.js `data-version` together in index.html on each release. Offline check: `node tools/pwa-check.mjs`.
+- Headless WebKit runs rAF slowly, so play.js calls `COACH.update()` after each render during the guided game. Top up after a hand clears `G.pre` (that hand can't be undone or replayed).
 
 ## Decisions
 - Measured bb/100 (6-seat ring, 2 of each): NL Easy −374 / Medium +163 / Hard +211 (20k hands, ±22–28); PL −407 / +152 / +255; FL −55 / +29 / +26. Heads-up Hard vs Medium: NL +52 ±18, PL +54 ±26, FL −5 ±15 (Hard ≈ Medium in fixed limit, said honestly in the app).
+- Hard vs Medium, heads-up tournaments 50 BB (sng.js, 800 duplicate games, 2026-10-27): NL 63.7%, PL 63.0% (unchanged; 88.7% of 100-hand matches), FL 58.3% → 68.4% after `hardLimit`. Medium beats Easy 68.8%. Profile ratings Easy 1200 / Medium 1340 / Hard 1440 from these.
 - Moving button (not dead button); all live hands shown at showdown; big-blind ante is blind-first (TDA 2024).
 - Study EV of a raise assumes one caller; "You knew" uses random opponent hands, "Their cards" the real ones.
 - Table look: deck + muck sit by the pot (casino dealer's spot); burns go in the muck; your folded cards stay dimmed in front of you; brass name placards; chip colours by blind size; phone hides opponents' stacks at 7+ players; dealer puck says "DEALER" on laptop, "D" on phone (on phone it sits just past the plate).
@@ -61,7 +65,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - On a real iPhone (only WebKit at 393 px via phone-view).
 - Timer beep/vibrate on iOS (vibrate is not supported on iOS Safari; beep needs a tap first).
 - Online play with real people on two real phones (only two headless WebKit pages against the live site + real Firebase), host hand-over when the creator drops, and reload mid-game rejoin.
-- Fixed limit: Hard is not measurably stronger than Medium (heads-up −5 ±15 bb/100).
+- NL/PL Hard beats Medium in 63–64% of heads-up tournaments (target 65%; 88.7% over 100-hand matches). FL 100-hand matches only 58.7% (+9.9 ±9.2 bb/100). The app's strength text / measure.js ring numbers were not re-measured after `hardLimit`; online limit tables use the new Hard too.
+- Improvement-pass look choices (plainest, Tim's call): manifest name "Texas Hold'em" / "Hold'em"; My stats top-right of setup, Daily game beside Play with friends; Undo in the HUD + Settings switch; Replay as a third button in the done row; Daily = NL tournament vs 5 computers, 50 BB; achievement names; tutorial wording. At 320 px the "Deal me in" button sits just below the fold on the setup screen.
 - Tag placement after the QA fixes was screenshotted only for 3 tables (2-computer showdown, tournament win, 8 computers preflop), not every seat count at showdown.
 - Sounds were never heard: no Web Audio in headless WebKit; the event -> sound mapping is checked by fx.test (spy on FX.play) and by eye in phone-view. Real iPhone sound, silent switch, and pacing by ear are untested. Online sounds come from the same render diff (4 online hands ran with fx loaded, zero errors) but were not listened to.
 - Real-table look: fold-to-muck animation seen only in a filmstrip frame. (320 px plate and landscape felt overflow fixed in v1.4.1.)

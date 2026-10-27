@@ -34,6 +34,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Design: no page scroll; phone bottom tabs, laptop uses width; labels 1–3 words; "?" explains WHY; red→green for good/bad numbers. $0.
 
 ## Traps
+- **online.js cache stamp (2026-10-27):** every import of `js/online.js` uses `?v=a3d0418b`, the `_online` content stamp. After a re-copy: put the new stamp from `node ../_online/tools/stamp.mjs` there, bump the importing file's `?v=` (and pwa.js `data-version`), then `node ../_online/tools/stamp.mjs --check .` must say OK.
 - `fill:` in phone-view doesn't fire on number inputs; real typing works (checked by hand). Use `--eval` to set values.
 - Port 8231 may be used by other game builders; serve on 8477.
 - The AA vs KK "81.9%" is the average over suits; the no-shared-suit case is 81.06%. Tests check all three.

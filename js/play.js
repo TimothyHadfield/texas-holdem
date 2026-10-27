@@ -167,9 +167,10 @@
   function undo() {
     const k = undoIndex();
     if (k < 0) return;
-    const states = rebuildHand(k);
-    const back = states[states.length - 1];
-    if (back.log.length !== k || back.toAct !== 0) { UI.toast("Can't undo this one"); return; }
+    let states;
+    try { states = rebuildHand(k); } catch (e) { states = null; }
+    const back = states && states[states.length - 1];
+    if (!back || back.log.length !== k || back.toAct !== 0) { UI.toast("Can't undo this one"); return; }
     const s = G.state;
     if (G.recorded) {
       // the hand was already saved for Study: take it back out
@@ -178,6 +179,7 @@
       if (j >= 0) { const st = UI.Store.data.stats; st.hands = Math.max(0, st.hands - 1); st.net -= h[j].net; h.splice(j, 1); }
       G.recorded = false;
       G.hands = Math.max(0, (G.hands || 1) - 1);
+      if (G.preStats) { G.bigPot = G.preStats.bigPot; G.best = G.preStats.best; } // this hand's big pot / best hand no longer happened
     }
     G.decisions = G.decisions.slice(0, s.log.slice(0, k).filter((e) => e.seat === 0 && ACTS.has(e.type)).length);
     G.helped = true;
@@ -210,6 +212,8 @@
     fxPrev = null; seen = new Set();
     render();
     schedule();
+    const s = G && G.state;
+    if (s && s.cfg.format === "tourney" && s.seats[0].out && G.toldOut) offerOut(); // the "You finished" sheet a quick Replay tap skipped
   }
   /** What happened at replay step i, in words. */
   function replayLine() {
@@ -305,6 +309,7 @@
     st.hands++; st.net += rec.net;
     // for My stats: hands this game, biggest pot you won (in big blinds), best hand you won with
     G.hands = (G.hands || 0) + 1;
+    G.preStats = { bigPot: G.bigPot || 0, best: G.best || 0 }; // Undo puts these back
     const mine = wonBy(s, 0);
     if (mine > 0) {
       G.bigPot = Math.max(G.bigPot || 0, Math.round(mine / s.bb));
@@ -977,7 +982,7 @@
     Sheet.open(`<h3>Table</h3>
       <div style="display:grid;gap:8px">
         <button class="btn" data-m="new">New table…</button>
-        ${s && s.cfg.format === "cash" && s.seats[0].stack < s.cfg.startStack && (s.street === "done") ? `<button class="btn" data-m="topup">Top up to ${fmt(s.cfg.startStack)}</button>` : ""}
+        ${s && !replay && s.cfg.format === "cash" && s.seats[0].stack < s.cfg.startStack && (s.street === "done") ? `<button class="btn" data-m="topup">Top up to ${fmt(s.cfg.startStack)}</button>` : ""}
         ${root.Profile ? `<button class="btn" data-m="stats">My stats</button>` : ""}
         ${root.COACH && root.HoldemCoach ? `<button class="btn" data-m="rules">Rules</button>` : ""}
         <button class="btn" data-help="strength">How strong are the computers?</button>
@@ -990,9 +995,10 @@
         if (m.dataset.m === "rules") { Sheet.close(); if (root.App.openRules) root.App.openRules(); }
         if (m.dataset.m === "topup") {
           // Top up adds only the missing chips, and counts only those as money put in.
-          const st = S(), me = st.seats[0], add = st.cfg.startStack - me.stack;
+          const st = G.state, me = st.seats[0], add = st.cfg.startStack - me.stack;
           me.topup = (me.topup || 0) + add; me.stack += add;
           G.startStacks[0] = (G.startStacks[0] || 0) + add;
+          G.pre = null; // the chips changed after the deal: this hand can't be rebuilt for Undo or Replay any more
           Sheet.close(); save(); render();
         }
       });
@@ -1093,7 +1099,7 @@
   root.PlayTab = {
     init, render: () => { render(); }, newGame, setOnline, sync, startDaily, startTutorial,
     state: () => (G && !G.online && !replay ? G.state : null),
-    isTutorial: () => !!(G && G.tutorial && !G.online),
+    isTutorial: () => { const g = G || UI.Store.data.game; return !!(g && g.tutorial && !g.online); },
     busy: () => !!replay || !!(G && G.state && !G.online && G.state.street !== "done" && G.state.street !== "idle"),
     online: () => !!(G && G.online) || !!onlineScreen,
   };

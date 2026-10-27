@@ -302,7 +302,8 @@
       // your chips: a real stack beside your cards (the number stays on the plate)
       const shownStack = p.out ? 0 : p.stack - (counting[p.i] || 0);
       // (a phone with 7+ players has no room for everyone's stack: the number on the plate stays)
-      const myStack = !p.out && shownStack > 0 && (wide || hero || n <= 6) ? chipStacks(shownStack, s.bb, wide || hero ? 6 : 4, wide || hero ? 3 : 2) : "";
+      // (nor once their cards are turned up: the face-up cards get that room; at a full table your own stack also steps aside at showdown)
+      const myStack = !p.out && shownStack > 0 && (wide || (hero && !(n >= 7 && s.street === "done")) || (!hero && n <= 6 && !showCards)) ?chipStacks(shownStack, s.bb, wide || hero ? 6 : 4, wide || hero ? 3 : 2) : "";
       const level = Math.abs(y - 47) < 14 && Math.abs(x - 50) > 30; // seats at the ends, level with the board
       html += `<div class="${cls}" data-seat="${p.i}" style="left:${x}%;top:${y}%">
         ${hero ? `<div class="hole">${cards}</div>${myStack ? `<div class="stk mine">${myStack}</div>` : ""}` : ""}
@@ -368,6 +369,7 @@
       if (side > 0) resLine += ` · ${side} side pot${side > 1 ? "s" : ""}`;
     }
     if (s.over && s.winner >= 0) resLine = `<b>${esc(s.seats[s.winner].name)} won the tournament</b>` + (resLine ? `<br>${resLine}` : "");
+    resNow = resLine;
     const potShown = s.street === "done" ? r0(s) : pot;
     const center = `<div class="center"><div class="dealer-spot"><div class="deck"></div>${muck}<div class="pot">${potShown > 0 ? `${chipStacks(potShown, s.bb, wide ? 7 : 5, 4)}<span class="amt">Pot ${fmt(potShown)}</span>` : ""}</div></div><div class="board">${board.join("")}</div><div class="result-line"${resLine ? reveal : ""}>${resLine}</div></div>`;
 
@@ -398,6 +400,15 @@
     if (!ta) return;
     const r = ta.getBoundingClientRect(), pad = 2;
     if (!r.width) return;
+    // an action tag that would sit on the board moves to the plate's outer corner
+    const bd = el.querySelector(".table-area .board");
+    if (bd) {
+      const b = bd.getBoundingClientRect();
+      el.querySelectorAll(".table-area .seat:not(.hero) .tag:not(.sd)").forEach((t) => {
+        const q = t.getBoundingClientRect();
+        if (Math.min(q.right, b.right) - Math.max(q.left, b.left) > 0 && Math.min(q.bottom, b.bottom) - Math.max(q.top, b.top) > 0) t.classList.add("flip");
+      });
+    }
     el.querySelectorAll(".table-area .seat:not(.hero)").forEach((seat) => {
       let L = Infinity, R = -Infinity, T = Infinity;
       for (const e of seat.querySelectorAll(".plate, .tag")) {
@@ -413,30 +424,68 @@
     });
     // a crowded small table: bets clear of the pot and of each other, turned-up cards clear of the result line
     const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-    const cy = r.top + r.height * 0.47;
-    const away = (node, box, obstacle) => {
-      if (!hit(box, obstacle)) return;
-      const down = box.top + box.height / 2 > obstacle.top + obstacle.height / 2;
-      const d = down ? obstacle.bottom - box.top + 2 : obstacle.top - box.bottom - 2;
-      node.style.transition = "none";
-      node.style.top = `calc(${node.style.top} + ${Math.round(d)}px)`;
-    };
-    const pot = el.querySelector(".table-area .pot .amt");
-    const placed = pot ? [pot.getBoundingClientRect()] : [];
-    Array.from(el.querySelectorAll(".table-area .seatbet"))
-      .sort((a, b) => Math.abs(a.getBoundingClientRect().top - cy) - Math.abs(b.getBoundingClientRect().top - cy))
-      .forEach((b) => {
-        const chips = b.querySelector(".bet");
-        if (!chips) return;
-        for (let pass = 0; pass < 3; pass++) for (const o of placed) away(b, chips.getBoundingClientRect(), o);
-        placed.push(chips.getBoundingClientRect());
-      });
+    // a crowded table: each player's cards, then each bet, slide the shortest way to a clear spot on the table
+    const rects = (sel) => Array.from(el.querySelectorAll(sel)).map((e) => e.getBoundingClientRect()).filter((q) => q.width);
+    // names, numbers, hand labels and the board count triple: covering them is worse than covering felt or chips
+    const text = (list) => list.map((q) => Object.assign({ left: q.left, right: q.right, top: q.top, bottom: q.bottom }, { w: 3 }));
+    const fixed = [...text(rects(".table-area .plate")), ...text(rects(".table-area .seat .tag")), ...text(rects(".table-area .board")), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot"), ...rects(".table-area .deck"), ...rects(".table-area .muck"), ...rects(".table-area .seat.hero .dealer")];
     const res = el.querySelector(".table-area .result-line");
-    if (res && res.textContent.trim()) {
-      const rg = document.createRange(); rg.selectNodeContents(res);
-      const tr = rg.getBoundingClientRect();
-      el.querySelectorAll(".table-area .spot").forEach((sp) => { const h = sp.querySelector(".hole"); if (h && h.children.length) away(sp, h.getBoundingClientRect(), tr); });
-    }
+    if (res && res.textContent.trim() && res.offsetParent) { const rg = document.createRange(); rg.selectNodeContents(res); fixed.push(...text([rg.getBoundingClientRect()])); }
+    const placed = [];
+    // stay on the felt (its box, a little inside the rail)
+    const f0 = el.querySelector(".table-area .felt").getBoundingClientRect();
+    const fr = { left: f0.left + 2, right: f0.right - 2, top: f0.top + 2, bottom: f0.bottom - 2 };
+    const union = (list) => list.reduce((u, q) => (u ? { left: Math.min(u.left, q.left), right: Math.max(u.right, q.right), top: Math.min(u.top, q.top), bottom: Math.max(u.bottom, q.bottom) } : q), null);
+    const settle = (node, boxes) => {
+      const shift = (q, dx, dy) => ({ left: q.left + dx, right: q.right + dx, top: q.top + dy, bottom: q.bottom + dy });
+      const area = (q, o) => (hit(q, o) ? (Math.min(q.right, o.right) - Math.max(q.left, o.left)) * (Math.min(q.bottom, o.bottom) - Math.max(q.top, o.top)) : 0);
+      // what each part covers, plus anything hanging off the felt (counted double)
+      const off = (q) => (Math.max(0, fr.left - q.left) + Math.max(0, q.right - fr.right)) * (q.bottom - q.top) + (Math.max(0, fr.top - q.top) + Math.max(0, q.bottom - fr.bottom)) * (q.right - q.left);
+      // the felt is oval: a corner past its edge sits on the rail
+      const ecx = (fr.left + fr.right) / 2, ecy = (fr.top + fr.bottom) / 2, erx = (fr.right - fr.left) / 2, ery = (fr.bottom - fr.top) / 2;
+      const rail = (q) => [[q.left, q.top], [q.right, q.top], [q.left, q.bottom], [q.right, q.bottom]].filter(([x, y]) => ((x - ecx) / erx) ** 2 + ((y - ecy) / ery) ** 2 > 1).length;
+      const over = (dx, dy) => { let a = 0; for (const b of boxes) { const q = shift(b, dx, dy); for (const o of fixed) a += area(q, o) * (o.w || 1); for (const o of placed) a += 3 * area(q, o); a += 4 * off(q) + 400 * rail(q); } return a; };
+      const here = over(0, 0);
+      if (!here) return boxes;
+      // each pixel moved costs a little, so a small overlap never sends things far across the table
+      let best = { a: here, c: here, dx: 0, dy: 0 };
+      for (let d = 3; d <= 54 && best.a > 0; d += 3) {
+        for (const [ux, uy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 1], [-2, 1], [2, -1], [-2, -1]]) {
+          const n = Math.hypot(ux, uy), dx = Math.round(ux / n * d), dy = Math.round(uy / n * d);
+          const a = over(dx, dy), c = a + 3 * d;
+          if (c < best.c) best = { a, c, dx, dy };
+          if (a === 0) break;
+        }
+      }
+      if (!best.dx && !best.dy) return boxes;
+      node.style.transition = "none";
+      if (node.style.left) {
+        node.style.left = `calc(${node.style.left} + ${best.dx}px)`;
+        node.style.top = `calc(${node.style.top} + ${best.dy}px)`;
+      } else {
+        // (placed by CSS: nudge it instead, adding to any earlier nudge)
+        const [tx, ty] = (node.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
+        node.style.translate = `${tx + best.dx}px ${ty + best.dy}px`;
+      }
+      return boxes.map((b) => shift(b, best.dx, best.dy));
+    };
+    // your own chip stack first (it can sit on the winner line on a narrow phone)
+    const mine = el.querySelector(".table-area .seat.hero .stk.mine");
+    if (mine && mine.getBoundingClientRect().width) placed.push(...settle(mine, [mine.getBoundingClientRect()]));
+    el.querySelectorAll(".table-area .spot").forEach((sp) => {
+      const h = sp.querySelector(".hole");
+      if (h && h.children.length) placed.push(...settle(sp, [union(Array.from(h.children).map((c) => c.getBoundingClientRect()))]));
+    });
+    Array.from(el.querySelectorAll(".table-area .seatbet")).forEach((b) => {
+      const chips = b.querySelector(".bet");
+      if (chips) placed.push(...settle(b, [chips.getBoundingClientRect()]));
+    });
+    // last, the dealer button finds a clear spot near its player
+    // (only when it covers something: on a phone it rests on the rail by design)
+    el.querySelectorAll(".table-area > .dealer").forEach((d) => {
+      const q = d.getBoundingClientRect();
+      if (fixed.concat(placed).some((o) => hit(q, o))) settle(d, [q]);
+    });
   }
 
   /** Real chip stacks for an amount: one column per colour, the biggest `cols` colours, at most `cap` chips drawn high.
@@ -602,6 +651,7 @@
     return r;
   }
 
+  let resNow = "";
   function renderHud() {
     const hud = el.querySelector("#hud");
     const s = S();
@@ -622,7 +672,8 @@
         ${need !== null ? `<span>Need <b>${pct(need, 0)}</b></span>` : `<span class="hname">${esc(name)}</span>`}`;
     } else if (s.street === "done") {
       const net = s.seats[0].stack - (G.startStacks[0] || 0);
-      html = `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
+      // phone on its side: the table has no room under the board, so who won goes here (CSS shows it only there)
+      html = (resNow ? `<div class="hud-res">${resNow}</div>` : "") + `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
     } else html = `<span class="hname">${me.folded ? "You folded" : esc(name)}</span>`;
     if (set.hints && s.toAct === 0 && !hintText) html += `<button class="btn small" data-hint>Hint</button>`;
     hud.innerHTML = html;

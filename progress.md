@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-20 (weird-scenario pass; v1.4.1, commit b568145).
+Last updated: 2026-10-27 (visibility pass; v1.4.2).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -21,6 +21,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Sound & effects (2026-10-20, v1.3.0) | Done: `js/fx.js` (unchanged copy of `../_fx/fx.js`), `js/table-fx.js` (state diff -> sounds/animations/celebrations, same for you, computers and online players), Settings section "Sound & effects". fx.test 34 |
 | Real-table look (2026-10-20, v1.4.0) | Done: seen from your seat. Felt + leather rail + wood ring + betting line (stadium shape on laptop); jumbo-index 63:88 cards with real pip layouts (full face from 46 px wide) and blue lattice backs; deck by the pot shrinks as cards are dealt; messy muck takes folds and burns; clay chip stacks in front of everyone, bets pushed toward the line, pot chips; dealer puck. Cards fly from the deck and turn in 3-D; folds fly to the muck. Research in the manager's scratchpad `table/texas-holdem/real.md`, before/after shots in `before/` and `after/` there |
 | Weird-scenario pass (2026-10-20, v1.4.1) | Done: 46 scenarios, 22 fixed (see "Edge pass" below). Live at b568145 |
+| Visibility pass (2026-10-27, v1.4.2) | Done: card indices ~30% bigger (opponents' showdown index 9.7 -> 12.4 px, phone board 13.4 -> 18.8 px), phone board 37 -> 41 px, sideways phone: slimmer bars + winner line in the column (felt 24% -> 29% of screen), weighted clear-spot search in keepOnScreen. Overlap failures 40 -> 8 of 66 shots. Shots + audit.mjs in the manager's scratchpad `vis/texas-holdem/` |
 | Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)
@@ -28,6 +29,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
 - "could you also make sure that each of the games also have a look to them so that the game (either board or card layout) looks almost identical to how the board or card layout looks like in real life, so it's easy to understand if you've already played it before, and also so it feels more like you're actually playing in real life rather than you're playing it online. Even things like how youre cards or other things are laid out infront of you, make it look like they are actual cards laid out similar to how it looks like in real life. Make the decks look like actual decks. Make the board have the same design as it does in real life with the same layouts. It should look kind of like you're looking through a camera that is connected to a user's glasses that is playing in real life (not actually, but the layout and style of everything should be similar)." (2026-10-20)
 - "I've noticed the games often have good user interfaces but could be improved especially when a scenario happens that the game might've not really thought about or whatnot. Could you focus on making each game perfect especially in scenarios that the game doesn't expect or are a little weird." (2026-10-20)
+- "for a lot of the games the cards or board layout is too small to easily see what's going on. Some games just need small design imporvements like filling the screen with the board view and fitting the cards and other things in the empty space, some have severe errors like TTR. Fix this so the view of what's happening and where everything is is very clear. Consider parts of the board that are dense in what's happening and if the user can reasonably see it." (2026-10-21)
 - Design: no page scroll; phone bottom tabs, laptop uses width; labels 1–3 words; "?" explains WHY; red→green for good/bad numbers. $0.
 
 ## Traps
@@ -40,7 +42,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - `js/table.js` and `css/table.css` must stay unchanged copies of `../_table/`; re-copy when those change.
 - `js/fx.js` must stay an unchanged copy of `../_fx/fx.js` (1.0.3+). Its Speed buttons now use `data-fxspeed`, so the old app.js `.fx-set` click workaround was removed (checked: Effects fast leaves Computer speed "normal"). fx's fallback switch/seg CSS beats ours on equal specificity, so `.fx-set ...` rules in style.css restyle them to match.
 - Playwright WebKit on Windows has no Web Audio (silent, `FX.supported` false) and runs rAF slowly, so confetti barely moves in screenshots.
-- Layout guard: `keepOnScreen()` in play.js runs after every render (and again next frame) and nudges seats, bets and showdown cards that overlap or leave the table area. Measure the real `.table-area` size, not an estimate. Compact plates kick in under 360 px wide and in phone landscape (max-height 520).
+- Layout guard: `keepOnScreen()` in play.js runs after every render (and again next frame): seats back on screen, then your stack, each player's cards, each bet and the dealer button slide to the cheapest nearby spot (cost = covered area, x3 for plates/tags/board/result line/already placed items, + off-felt and rail-corner penalties, + 3 per px moved). Tune the weights there, and re-run `audit.mjs` (manager scratchpad `vis/texas-holdem/`, serve on your own port with `--bind 127.0.0.1`: port 47613 was shared with another process on 10-27). Measure the real `.table-area` size, not an estimate. Compact plates kick in under 360 px wide and in phone landscape (max-height 520).
 - Taps on action buttons are ignored for 350 ms after a new decision appears (`TAP_GUARD_MS`); online, one move per decision is sent until the server answers or 8 s pass.
 - Edge-pass test scripts (behave.mjs, layout.mjs, fixtures.js) live in the manager's scratchpad `edge/texas-holdem/`; serve with `python -m http.server <port> --directory <folder>` (a bare port can hit another builder's server).
 - Measuring strength takes minutes: `node tools/measure.js` (see the file header for options).
@@ -63,7 +65,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Tag placement after the QA fixes was screenshotted only for 3 tables (2-computer showdown, tournament win, 8 computers preflop), not every seat count at showdown.
 - Sounds were never heard: no Web Audio in headless WebKit; the event -> sound mapping is checked by fx.test (spy on FX.play) and by eye in phone-view. Real iPhone sound, silent switch, and pacing by ear are untested. Online sounds come from the same render diff (4 online hands ran with fx loaded, zero errors) but were not listened to.
 - Real-table look: fold-to-muck animation seen only in a filmstrip frame. (320 px plate and landscape felt overflow fixed in v1.4.1.)
-- iPhone SE landscape (568x320) with 7–9 players is still crowded (tags/plates touch hole cards or the result line); 659x393 nine-player showdown: two hole cards hang over the rail.
+- iPhone SE landscape (568x320) with 9 players all in is still tight (bets close together, a card corner under a plate); laptop bets near the pot can still look like a neighbour's; phone portrait keeps an empty ~55 px band above the buttons when it's not your raise (reserved so buttons don't jump).
+- Visibility look choices (plainest, Tim's call): opponents' chip stacks hide on phone once their cards are turned up; your own stack hides at a 7+ player phone showdown; winner line moves to the side column on a sideways phone.
 - Reviewer look items left for Tim: your cards over the rail, laptop bets ambiguous, dealer button far from its seat, stacks all look the same size, empty band above buttons, phone cards have no pips, plain setup form.
 - Not run: duplicate names, online AFK/host leaving (shared online.js), storage full, 10+ min in the background on a real phone.
 - docs/rules-check.md row 26 was added with a python script (rule slip; content checked by rules-doc.test).

@@ -37,3 +37,9 @@
 - **Built:** reviewer (read-only) run; 46 scenarios listed and tested; fixes in play.js (keepOnScreen layout guard, tap guard, online one-move-per-decision, no re-deal on reload, emoji avatar, log scroll, sync between tabs, results sheet), app.js (Back walks tabs, storage sync), engine.js (equal-stack busts tie, rules-check row 26), style.css (compact plates, landscape side column, header truncation).
 - **Verified:** `npm test` 79/21/118/36/55/34 on main; new engine tests seen failing first; behave.mjs 15/15 and layout.mjs (8 fixtures x 6 sizes) against the live site at b568145.
 - **Open:** iPhone SE landscape with 9 players still crowded; reviewer look items left for Tim (progress.md NOT verified).
+
+## 2026-10-21 → 10-27 — visibility pass (v1.4.2)
+- **Asked (Tim, via manager):** make what's happening clearly visible; dense parts readable (words in progress.md). Paused 10-21 as a WIP commit, finished 10-27.
+- **Built:** bigger card indices (all cards), bigger phone board, slimmer header/tabs on a sideways phone + winner line moved into the side column there, action tags flip off the board, keepOnScreen rewritten as a weighted "nearest clear spot" search (cards, then bets, then the dealer button; covering names/numbers/board counts triple, rail and travel cost), opponents' stacks hidden on phone once their cards are up, your stack hidden at a 7+ phone showdown.
+- **Verified:** audit.mjs (manager scratchpad `vis/texas-holdem/`, 11 fixtures x 6 sizes, WebKit): overlap/legibility failures 40 -> see progress.md; taps on every action button hit their target in WebKit and Chrome at 393/320/568x320/1280; `npm test` green. One reviewer sub-agent run, its high items fixed.
+- **Open:** 9-seat all-in on an iPhone SE sideways is still tight; laptop bets near the pot still ambiguous.

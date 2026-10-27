@@ -302,7 +302,8 @@
       // your chips: a real stack beside your cards (the number stays on the plate)
       const shownStack = p.out ? 0 : p.stack - (counting[p.i] || 0);
       // (a phone with 7+ players has no room for everyone's stack: the number on the plate stays)
-      const myStack = !p.out && shownStack > 0 && (wide || hero || n <= 6) ? chipStacks(shownStack, s.bb, wide || hero ? 6 : 4, wide || hero ? 3 : 2) : "";
+      // (nor once their cards are turned up: the face-up cards get that room; at a full table your own stack also steps aside at showdown)
+      const myStack = !p.out && shownStack > 0 && (wide || (hero && !(n >= 7 && s.street === "done")) || (!hero && n <= 6 && !showCards)) ?chipStacks(shownStack, s.bb, wide || hero ? 6 : 4, wide || hero ? 3 : 2) : "";
       const level = Math.abs(y - 47) < 14 && Math.abs(x - 50) > 30; // seats at the ends, level with the board
       html += `<div class="${cls}" data-seat="${p.i}" style="left:${x}%;top:${y}%">
         ${hero ? `<div class="hole">${cards}</div>${myStack ? `<div class="stk mine">${myStack}</div>` : ""}` : ""}
@@ -423,51 +424,67 @@
     });
     // a crowded small table: bets clear of the pot and of each other, turned-up cards clear of the result line
     const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-    const cy = r.top + r.height * 0.47;
-    const away = (node, box, obstacle) => {
-      if (!hit(box, obstacle)) return;
-      const down = box.top + box.height / 2 > obstacle.top + obstacle.height / 2;
-      const d = down ? obstacle.bottom - box.top + 2 : obstacle.top - box.bottom - 2;
-      node.style.transition = "none";
-      node.style.top = `calc(${node.style.top} + ${Math.round(d)}px)`;
-    };
-    void away; void cy;
     // a crowded table: each player's cards, then each bet, slide the shortest way to a clear spot on the table
     const rects = (sel) => Array.from(el.querySelectorAll(sel)).map((e) => e.getBoundingClientRect()).filter((q) => q.width);
-    const fixed = [...rects(".table-area .plate"), ...rects(".table-area .seat .tag"), ...rects(".table-area .board"), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot")];
+    // names, numbers, hand labels and the board count triple: covering them is worse than covering felt or chips
+    const text = (list) => list.map((q) => Object.assign({ left: q.left, right: q.right, top: q.top, bottom: q.bottom }, { w: 3 }));
+    const fixed = [...text(rects(".table-area .plate")), ...text(rects(".table-area .seat .tag")), ...text(rects(".table-area .board")), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot"), ...rects(".table-area .deck"), ...rects(".table-area .muck"), ...rects(".table-area .seat.hero .dealer")];
     const res = el.querySelector(".table-area .result-line");
-    if (res && res.textContent.trim()) { const rg = document.createRange(); rg.selectNodeContents(res); fixed.push(rg.getBoundingClientRect()); }
+    if (res && res.textContent.trim() && res.offsetParent) { const rg = document.createRange(); rg.selectNodeContents(res); fixed.push(...text([rg.getBoundingClientRect()])); }
     const placed = [];
     // stay on the felt (its box, a little inside the rail)
     const f0 = el.querySelector(".table-area .felt").getBoundingClientRect();
     const fr = { left: f0.left + 2, right: f0.right - 2, top: f0.top + 2, bottom: f0.bottom - 2 };
-    const settle = (node, box) => {
+    const union = (list) => list.reduce((u, q) => (u ? { left: Math.min(u.left, q.left), right: Math.max(u.right, q.right), top: Math.min(u.top, q.top), bottom: Math.max(u.bottom, q.bottom) } : q), null);
+    const settle = (node, boxes) => {
       const shift = (q, dx, dy) => ({ left: q.left + dx, right: q.right + dx, top: q.top + dy, bottom: q.bottom + dy });
-      const over = (q) => { let a = 0; for (const o of fixed.concat(placed)) if (hit(q, o)) a += (Math.min(q.right, o.right) - Math.max(q.left, o.left)) * (Math.min(q.bottom, o.bottom) - Math.max(q.top, o.top)); return a; };
-      if (!over(box)) return box;
-      let best = null;
-      for (let d = 3; d <= 30 &&!(best && best.a === 0); d += 3) {
-        for (const [dx, dy] of [[0, d], [0, -d], [d, 0], [-d, 0], [d, d], [-d, d], [d, -d], [-d, -d]]) {
-          const q = shift(box, dx, dy);
-          if (q.left < fr.left || q.right > fr.right || q.top < fr.top || q.bottom > fr.bottom) continue;
-          const a = over(q);
-          if (!best || a < best.a) best = { a, dx, dy, q };
+      const area = (q, o) => (hit(q, o) ? (Math.min(q.right, o.right) - Math.max(q.left, o.left)) * (Math.min(q.bottom, o.bottom) - Math.max(q.top, o.top)) : 0);
+      // what each part covers, plus anything hanging off the felt (counted double)
+      const off = (q) => (Math.max(0, fr.left - q.left) + Math.max(0, q.right - fr.right)) * (q.bottom - q.top) + (Math.max(0, fr.top - q.top) + Math.max(0, q.bottom - fr.bottom)) * (q.right - q.left);
+      // the felt is oval: a corner past its edge sits on the rail
+      const ecx = (fr.left + fr.right) / 2, ecy = (fr.top + fr.bottom) / 2, erx = (fr.right - fr.left) / 2, ery = (fr.bottom - fr.top) / 2;
+      const rail = (q) => [[q.left, q.top], [q.right, q.top], [q.left, q.bottom], [q.right, q.bottom]].filter(([x, y]) => ((x - ecx) / erx) ** 2 + ((y - ecy) / ery) ** 2 > 1).length;
+      const over = (dx, dy) => { let a = 0; for (const b of boxes) { const q = shift(b, dx, dy); for (const o of fixed) a += area(q, o) * (o.w || 1); for (const o of placed) a += 3 * area(q, o); a += 4 * off(q) + 400 * rail(q); } return a; };
+      const here = over(0, 0);
+      if (!here) return boxes;
+      // each pixel moved costs a little, so a small overlap never sends things far across the table
+      let best = { a: here, c: here, dx: 0, dy: 0 };
+      for (let d = 3; d <= 54 && best.a > 0; d += 3) {
+        for (const [ux, uy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 1], [-2, 1], [2, -1], [-2, -1]]) {
+          const n = Math.hypot(ux, uy), dx = Math.round(ux / n * d), dy = Math.round(uy / n * d);
+          const a = over(dx, dy), c = a + 3 * d;
+          if (c < best.c) best = { a, c, dx, dy };
           if (a === 0) break;
         }
       }
-      if (!best || best.a >= over(box)) return box;
+      if (!best.dx && !best.dy) return boxes;
       node.style.transition = "none";
-      node.style.left = `calc(${node.style.left} + ${best.dx}px)`;
-      node.style.top = `calc(${node.style.top} + ${best.dy}px)`;
-      return best.q;
+      if (node.style.left) {
+        node.style.left = `calc(${node.style.left} + ${best.dx}px)`;
+        node.style.top = `calc(${node.style.top} + ${best.dy}px)`;
+      } else {
+        // (placed by CSS: nudge it instead, adding to any earlier nudge)
+        const [tx, ty] = (node.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
+        node.style.translate = `${tx + best.dx}px ${ty + best.dy}px`;
+      }
+      return boxes.map((b) => shift(b, best.dx, best.dy));
     };
+    // your own chip stack first (it can sit on the winner line on a narrow phone)
+    const mine = el.querySelector(".table-area .seat.hero .stk.mine");
+    if (mine && mine.getBoundingClientRect().width) placed.push(...settle(mine, [mine.getBoundingClientRect()]));
     el.querySelectorAll(".table-area .spot").forEach((sp) => {
       const h = sp.querySelector(".hole");
-      if (h && h.children.length) placed.push(settle(sp, h.getBoundingClientRect()));
+      if (h && h.children.length) placed.push(...settle(sp, [union(Array.from(h.children).map((c) => c.getBoundingClientRect()))]));
     });
     Array.from(el.querySelectorAll(".table-area .seatbet")).forEach((b) => {
       const chips = b.querySelector(".bet");
-      if (chips) placed.push(settle(b, chips.getBoundingClientRect()));
+      if (chips) placed.push(...settle(b, [chips.getBoundingClientRect()]));
+    });
+    // last, the dealer button finds a clear spot near its player
+    // (only when it covers something: on a phone it rests on the rail by design)
+    el.querySelectorAll(".table-area > .dealer").forEach((d) => {
+      const q = d.getBoundingClientRect();
+      if (fixed.concat(placed).some((o) => hit(q, o))) settle(d, [q]);
     });
   }
 

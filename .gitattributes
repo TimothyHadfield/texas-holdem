@@ -10,3 +10,4 @@ js/pwa.js -text
 sw.js -text
 tools/make-icons.mjs -text
 tools/pwa-check.mjs -text
+js/online.js -text

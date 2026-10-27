@@ -53,7 +53,9 @@
     let w, draw = false;
     if (g.format === "tourney") w = g.place === 1;
     else { w = g.netBB > 0; draw = g.netBB === 0; if (draw) w = false; }
+    if (g.quit) { w = false; draw = false; }   // left before the end: a loss
     const extra = { format: g.format, players: g.players, place: g.place || 0, netBB: Math.round(g.netBB || 0), bigPot: Math.round(g.bigPot || 0), best: g.best || 0 };
+    if (g.quit) extra.quit = true;
     return { mode, level: mode === "computer" ? level : null, won: w, draw, score: g.format === "tourney" ? g.place : Math.round(g.netBB || 0), daily: !!g.daily, extra };
   }
 

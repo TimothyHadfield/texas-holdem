@@ -340,15 +340,23 @@
     if (s.seats[0].out) profileRecord({ place: s.seats[0].place });
     else if (s.over && s.winner === 0) profileRecord({ place: 1 });
   }
-  /** Cash game: leaving the table ends the session (10 hands or more count). A Daily left early counts as a loss. */
+  /** Cash game: leaving the table after 10 hands or more ends the session with its result. Leaving earlier (a cash
+   *  game under 10 hands, a tournament you're still in) counts as a loss, so a bad game can't be dropped; a table
+   *  left before the first hand is over doesn't count. The guided game never counts. */
   function recordSession() {
-    if (!G || G.online || G.profiled || !G.state) return;
+    if (!G || G.online || G.profiled || !G.state || G.tutorial || !(G.hands || 0)) return;
     const s = G.state;
-    if (s.cfg.format === "cash" && (G.hands || 0) >= 10) {
+    if (s.cfg.format === "cash") {
       const me = s.seats[0];
       const net = me.stack - s.cfg.startStack * me.buyIns - (me.topup || 0);
-      profileRecord({ netBB: net / s.cfg.bb });
-    } else if (s.cfg.format === "tourney" && G.daily && (G.hands || 0) > 0) profileRecord({ place: 0 });
+      if (G.hands >= 10) profileRecord({ netBB: net / s.cfg.bb });
+      else quitRecord({ netBB: net / s.cfg.bb });
+    } else quitRecord({ place: 0 });
+  }
+  function quitRecord(g) {
+    const daily = !!G.daily;
+    profileRecord(Object.assign({ quit: true }, g));
+    UI.toast((daily ? "Daily game" : "Game") + " left early: counted as a loss");
   }
 
   function allInLuck(s) {

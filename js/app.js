@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   const { UI } = root;
-  const VERSION = "1.5.0 (2026-10-27)";
+  const VERSION = "1.5.1 (2026-10-27)";
   const TITLES = { odds: "Odds", study: "Study", play: "Hold'em", home: "Home game", settings: "Settings" };
 
   // Measured strengths (tools/measure.js) — shown behind the "How strong?" ?

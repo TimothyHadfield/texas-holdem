@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-27 (improvement pass; v1.5.0).
+Last updated: 2026-10-27 (v1.5.1 follow-up: leaving a table early counts as a loss in My stats: a cash game under 10 hands or a tournament you're still in (`recordSession` → `quitRecord`, result `extra.quit`); 10+ hand cash sessions still count their real result; nothing counts before the first hand ends, and the guided game never counts (it used to after 10 hands). Toast "Game left early: counted as a loss" (wording not Tim's). `tests/quit.test.mjs` (WebKit 393, in `npm test`, seen failing on v1.5.0); build 11. Before that: improvement pass, v1.5.0).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now

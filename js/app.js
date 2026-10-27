@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
   const { UI } = root;
-  const VERSION = "1.4.2 (2026-10-27)";
+  const VERSION = "1.5.0 (2026-10-27)";
   const TITLES = { odds: "Odds", study: "Study", play: "Hold'em", home: "Home game", settings: "Settings" };
 
   // Measured strengths (tools/measure.js) — shown behind the "How strong?" ?
@@ -51,11 +51,15 @@
       <div class="sgroup label">Play</div>
       ${sw("overlay", "Odds while playing", "Your win chance and the price to call")}
       ${sw("hints", "Hint button", "What the Hard computer would do")}
+      ${sw("undo", "Undo button", "Take back your last move against the computers")}
       ${sw("autoNext", "Deal the next hand automatically")}
       <div class="srow"><div class="t">Computer speed</div><div class="seg" style="width:210px">${["slow", "normal", "fast"].map((k) => `<button data-speed="${k}" class="${s.speed === k ? "on" : ""}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div></div>
       <div class="sgroup label">Cards</div>
       ${sw("fourColor", "Four-colour deck", "Clubs green, diamonds blue")}
       ${root.FX ? `<div class="sgroup label">Sound & effects</div><div data-fxbox></div>` : ""}
+      ${root.COACH && root.HoldemCoach ? `<div class="sgroup label">Learn</div>
+      <div class="srow"><div class="t">Rules</div><button class="btn small" data-rules>Open</button></div>
+      <div class="srow"><div class="t">Guided first game<small>One hand against an Easy computer, step by step</small></div><button class="btn small" data-tutorial>Start</button></div>` : ""}
       <div class="sgroup label">About</div>
       <div class="srow"><div class="t">How strong are the computers?</div><button class="qm" data-help="strength">?</button></div>
       <div class="srow"><div class="t">Clear hand history<small>${UI.Store.data.history.length} hands saved on this device</small></div><button class="btn small danger" data-clearhist>Clear</button></div>
@@ -73,9 +77,11 @@
     applySettings();
   });
   document.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-tab], [data-speed], [data-clearhist], [data-confirmclear]");
+    const b = e.target.closest("[data-tab], [data-speed], [data-clearhist], [data-confirmclear], [data-rules], [data-tutorial]");
     if (!b) return;
-    if (b.dataset.tab) go(b.dataset.tab);
+    if (b.dataset.rules !== undefined) openRules();
+    else if (b.dataset.tutorial !== undefined) startTutorial();
+    else if (b.dataset.tab) go(b.dataset.tab);
     else if (b.dataset.speed) { UI.Store.data.settings.speed = b.dataset.speed; UI.Store.save(); renderSettings(document.getElementById("view-settings")); }
     else if (b.dataset.clearhist !== undefined) {
       UI.Sheet.open(`<h3>Clear hand history?</h3><p>Removes all ${UI.Store.data.history.length} saved hands from this device.</p><div class="row"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" data-close data-confirmclear>Clear</button></div>`);
@@ -106,9 +112,41 @@
     root.FX.init({ game: "holdem", accent: "#6ea8fe", onChange: fx });
     fx();
   }
-  root.App = { go, VERSION };
+  // ---- rules sheet + guided first game (shared _coach kit; js/coach-holdem.js has the words)
+  let tour = null;
+  function openRules(open) {
+    if (!root.COACH || !root.HoldemCoach) return;
+    UI.Sheet.close();
+    root.COACH.rules(Object.assign(root.HoldemCoach.rules(), { open }));
+  }
+  function startTutorial() {
+    if (!tour) return;
+    if (root.COACH) root.COACH.closeOffer();
+    tour.reset();
+    root.PlayTab.startTutorial();
+    if (root.PlayTab.isTutorial()) tour.start();
+  }
+  if (root.COACH && root.HoldemCoach) {
+    tour = root.COACH.tour({
+      id: root.HoldemCoach.ID,
+      steps: root.HoldemCoach.steps({ state: () => (root.PlayTab ? root.PlayTab.state() : null), overlay: () => !!UI.Store.data.settings.overlay }),
+      pauseIf: () => UI.Store.data.tab !== "play" || !document.getElementById("sheet").hidden || !root.PlayTab || !root.PlayTab.isTutorial() || !root.PlayTab.state() || (root.Profile && root.Profile.isOpen()),
+    });
+    // the sheet opening or closing re-checks pauseIf at once
+    new MutationObserver(() => root.COACH.update()).observe(document.getElementById("sheet"), { attributes: true, attributeFilter: ["hidden"] });
+  }
+  /** First visit, on the setup screen: offer the guided game once. */
+  function offerTutorial() {
+    if (!tour || !root.COACH || UI.Store.data.tab !== "play" || UI.Store.data.game || tour.seen() || tour.saved() || root.COACH.offered(root.HoldemCoach.ID)) return;
+    if (UI.Store.data.history.length) return; // played here before: not new
+    root.COACH.offer({ id: root.HoldemCoach.ID, title: "New to Hold'em?", text: "Play one guided hand against an Easy computer.", yes: "Teach me", no: "No thanks", onYes: startTutorial });
+  }
+
+  root.App = { go, VERSION, openRules, startTutorial };
   try { history.replaceState({ tab: UI.Store.data.tab || "play" }, ""); } catch (e) { /* ignore */ }
   root.addEventListener("popstate", (e) => {
+    if (root.COACH && root.COACH.rulesOpen()) { root.COACH.closeRules(); try { history.pushState({ tab: UI.Store.data.tab }, ""); } catch (er) { /* ignore */ } return; }
+    if (root.Profile && root.Profile.isOpen()) { root.Profile.closePanel(); try { history.pushState({ tab: UI.Store.data.tab }, ""); } catch (er) { /* ignore */ } return; }
     UI.Sheet.close();
     const tab = e.state && e.state.tab;
     if (tab && TITLES[tab]) go(tab, true);
@@ -122,5 +160,26 @@
     applySettings();
     if (inited.play) root.PlayTab.sync();
   });
+  // ---- My stats (shared _profile kit: everything stays on this device)
+  if (root.Profile && root.HoldemProfile) {
+    root.Profile.init({
+      game: "holdem", levels: root.HoldemProfile.LEVELS, achievements: root.HoldemProfile.achievements,
+      modes: { help: { name: "Computers, with help" }, online: { hide: true } },
+      daily: { title: "Daily game", onPlay: () => root.PlayTab.startDaily() },
+      onChange: (what) => { if ((what === "me" || what === "import") && UI.Store.data.tab === "play" && !UI.Store.data.game) root.PlayTab.render(); },
+    });
+  }
   go(UI.Store.data.tab || "play");
+  if (tour && root.PlayTab.isTutorial()) tour.resume(); // carry on after a reload
+  offerTutorial();
+  // ---- home-screen app (shared _pwa kit): a new deploy reloads by itself only when nothing would be lost
+  if (root.PWA) root.PWA.safeToReload = () => {
+    const ae = document.activeElement;
+    if (!document.getElementById("sheet").hidden || (root.COACH && root.COACH.rulesOpen()) || (root.Profile && root.Profile.isOpen())) return false;
+    if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return false;
+    if (root.PlayTab.online()) return false;
+    if (UI.Store.data.home && UI.Store.data.home.running) return false; // a home game's blind clock is ticking
+    // mid-hand on the table: wait (the game is saved, but a reload would blink the table)
+    return UI.Store.data.tab !== "play" || !root.PlayTab.busy();
+  };
 })(this);

@@ -11,11 +11,11 @@
       try { d = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { d = null; }
       this.data = Object.assign({
         tab: "play",
-        settings: { overlay: true, hints: true, speed: "normal", fourColor: false, autoNext: false },
+        settings: { overlay: true, hints: true, undo: true, speed: "normal", fourColor: false, autoNext: false },
         setup: { opponents: 5, level: "mixed", betting: "nl", format: "cash", stack: 100, ante: "none" },
         game: null, history: [], odds: null, home: null, stats: { hands: 0, net: 0 },
       }, d || {});
-      this.data.settings = Object.assign({ overlay: true, hints: true, speed: "normal", fourColor: false, autoNext: false }, this.data.settings);
+      this.data.settings = Object.assign({ overlay: true, hints: true, undo: true, speed: "normal", fourColor: false, autoNext: false }, this.data.settings);
       return this.data;
     },
     save() {

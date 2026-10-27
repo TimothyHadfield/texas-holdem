@@ -26,6 +26,8 @@
   let actReadyAt = 0;         // a fresh decision ignores taps for a moment (a double tap must not act twice)
   let sentKey = "";           // online: the decision whose move is on its way to the server
   const TAP_GUARD_MS = 350;
+  let replay = null;          // { states, i }: stepping through the last hand on the table (all cards face up)
+  const ACTS = new Set(["fold", "check", "call", "bet", "raise"]);
 
   function init(container) {
     el = container;
@@ -37,12 +39,13 @@
     if (root.OnlinePlay) root.OnlinePlay.resume();
   }
 
-  const S = () => G.state;
+  const S = () => (replay ? replay.states[replay.i] : G.state);
   const save = () => { if (G && G.online) return; UI.Store.data.game = G; UI.Store.save(); };
 
   /** Online table hooks (online-play.js). s = state rotated so you are seat 0,
    *  or null to leave online mode; lobby = a lobby/joining snapshot to show. */
   function setOnline(s, lobby) {
+    replay = null;
     if (s) {
       if (!G || !G.online) { solo = G; G = { online: true, state: null, decisions: [], startStacks: [], recorded: true }; seen = new Set(); onlineScreen = null; }
       // chips each seat had when this hand was dealt (for "This hand: +120")
@@ -63,7 +66,7 @@
     const lv = (k, name, note) => `<button data-lvl="${k}" class="${st.level === k ? "on" : ""}">${name}<small>${note}</small></button>`;
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, t]) => `<button data-set="${key}" data-v="${v}" class="${String(st[key]) === String(v) ? "on" : ""}">${t}</button>`).join("")}</div>`;
     el.innerHTML = `<div class="setup scroll">
-      <h2>New table</h2>
+      <div class="setup-head"><h2>New table</h2>${root.Profile ? `<button class="btn small ghost pf-open" data-mystats>${root.Profile.avatarSVG(root.Profile.avatar, 24)}<span>My stats</span></button>` : ""}</div>
       <div class="field"><span class="label">Computers</span><div class="stepper"><button data-opps="-1" aria-label="Fewer">−</button><b>${st.opponents}</b><button data-opps="1" aria-label="More">+</button></div></div>
       <div><div class="label" style="margin-bottom:6px">Strength ${qm("strength")}</div>
         <div class="lvl-grid">${lv("easy", "Easy", "loose")}${lv("medium", "Medium", "solid")}${lv("hard", "Hard", "reads you")}${lv("mixed", "Mixed", "a bit of each")}</div></div>
@@ -73,23 +76,25 @@
       <div class="field"><span class="label">Antes</span>${seg("ante", [["none", "None"], ["each", "Everyone"], ["bb", "Big blind"]])}</div>
       <p class="muted" style="margin:0;font-size:13px">${st.format === "tourney" ? "Blinds go up every 10 hands. Last player with chips wins." : "Blinds stay 10/20. Out of chips? Buy back in."}</p>
       <button class="btn primary" data-start style="min-height:52px;font-size:17px">Deal me in</button>
-      ${root.OnlinePlay ? `<button class="btn" data-online>Play with friends</button>` : ""}
+      <div class="setup-more">${root.OnlinePlay ? `<button class="btn" data-online>Play with friends</button>` : ""}${root.Profile ? `<button class="btn" data-daily>Daily game</button>` : ""}</div>
     </div>`;
   }
 
-  function startGame() {
-    const st = UI.Store.data.setup;
-    const n = st.opponents;
+  /** A new local table. o (optional): { levels, seed, betting, format, stack, ante, tutorial, daily } — else the setup screen's choices. */
+  function startGame(o) {
+    recordSession();
+    const st = Object.assign({}, UI.Store.data.setup, o || {});
     const levels = ["easy", "medium", "hard"];
     const players = [{ name: "You", kind: "human" }];
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const seed = st.seed || (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     const rand = P.rng32(seed);
+    const n = st.levels ? st.levels.length : st.opponents;
     for (let i = 0; i < n; i++) {
-      const level = st.level === "mixed" ? levels[i % 3] : st.level;
+      const level = st.levels ? st.levels[i] : st.level === "mixed" ? levels[i % 3] : st.level;
       players.push({ name: NAMES[i], kind: "bot", level });
     }
     // mixed: shuffle which seat gets which level
-    if (st.level === "mixed") {
+    if (!st.levels && st.level === "mixed") {
       const ls = players.slice(1).map((p) => p.level);
       for (let i = ls.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [ls[i], ls[j]] = [ls[j], ls[i]]; }
       players.slice(1).forEach((p, i) => { p.level = ls[i]; });
@@ -99,8 +104,9 @@
       ante: st.ante === "none" ? 0 : st.ante === "bb" ? 20 : 2, anteType: st.ante === "bb" ? "bb" : "each",
       levelHands: 10, anteFromLevel: st.ante === "none" ? 99 : 1,
     };
-    G = { state: E.newGame(cfg, players), decisions: [], startStacks: [], handLog: null, done: false };
+    G = { state: E.newGame(cfg, players), decisions: [], startStacks: [], handLog: null, done: false, hands: 0, bigPot: 0, best: 0, helped: !!st.tutorial, tutorial: !!st.tutorial, daily: st.daily || null };
     seen = new Set();
+    replay = null;
     dealNext();
   }
 
@@ -125,17 +131,108 @@
     G.startStacks = s.seats.map((p) => p.stack);
     G.decisions = [];
     G.recorded = false;
+    G.pre = s; // the table just before this deal: Undo and Replay rebuild the hand from it
     s = E.apply(s, { type: "deal" });
     setState(s);
+  }
+
+  // ================================================================ undo + replay (rebuilt from G.pre: the engine is pure)
+  const toAction = (e) => (e.type === "bet" || e.type === "raise" ? { type: "raise", to: e.to } : { type: e.type });
+  /** Every state of the current hand, from the deal to `upTo` log entries (all of them if omitted). */
+  function rebuildHand(upTo) {
+    const full = G.state;
+    let s = E.apply(G.pre, { type: "deal" });
+    const out = [s];
+    const end = upTo === undefined ? full.log.length : upTo;
+    let guard = 0;
+    while (s.log.length < end && guard++ < 500) {
+      const e = full.log[s.log.length];
+      if (!e || !ACTS.has(e.type) || e.seat !== s.toAct) break;
+      s = E.apply(s, toAction(e));
+      out.push(s);
+    }
+    return out;
+  }
+  /** G.pre is the table just before this very hand (a finished hand has already counted itself in s.hand). */
+  const preOk = () => !!(G && G.pre && G.state && G.pre.hand + (G.state.street === "done" ? 1 : 0) === G.state.hand && G.pre.cfg.seed === G.state.cfg.seed);
+  /** Log index of your last move this hand that Undo can take back, or -1. */
+  function undoIndex() {
+    if (!G || G.online || !preOk() || replay) return -1;
+    const s = G.state;
+    if (s.over || s.seats[0].out || G.profiled) return -1;
+    if (s.street !== "done" && s.toAct !== 0) return -1; // only when it's your move again, or the hand is over
+    for (let k = s.log.length - 1; k >= 0; k--) { const e = s.log[k]; if (e.seat === 0 && ACTS.has(e.type)) return k; }
+    return -1;
+  }
+  function undo() {
+    const k = undoIndex();
+    if (k < 0) return;
+    const states = rebuildHand(k);
+    const back = states[states.length - 1];
+    if (back.log.length !== k || back.toAct !== 0) { UI.toast("Can't undo this one"); return; }
+    const s = G.state;
+    if (G.recorded) {
+      // the hand was already saved for Study: take it back out
+      const h = UI.Store.data.history, id = s.cfg.seed + "-" + s.hand;
+      const j = h.findIndex((r) => r.id === id);
+      if (j >= 0) { const st = UI.Store.data.stats; st.hands = Math.max(0, st.hands - 1); st.net -= h[j].net; h.splice(j, 1); }
+      G.recorded = false;
+      G.hands = Math.max(0, (G.hands || 1) - 1);
+    }
+    G.decisions = G.decisions.slice(0, s.log.slice(0, k).filter((e) => e.seat === 0 && ACTS.has(e.type)).length);
+    G.helped = true;
+    fxPrev = null; seen = new Set(); // nothing is dealt again: the cards are already on the table
+    sizerKey = "";
+    if (root.COACH) root.COACH.emit("undo");
+    setState(back);
+  }
+  function startReplay() {
+    if (!G || G.online || !preOk() || G.state.street !== "done") return;
+    clearTimeout(timer); gen++;
+    let states;
+    try { states = rebuildHand(); } catch (e) { states = null; }
+    if (!states || states[states.length - 1].log.length !== G.state.log.length) { UI.toast("Can't replay this hand"); return; }
+    replay = { states, i: 0 };
+    fxPrev = TF ? TF.SETUP : null; seen = new Set(); // the deal animates like a real one
+    render();
+  }
+  function stepReplay(d) {
+    if (!replay) return;
+    const i = Math.max(0, Math.min(replay.states.length - 1, replay.i + d));
+    if (i === replay.i) return;
+    if (d < 0) fxPrev = null; // stepping back: no sounds or flying chips
+    replay.i = i;
+    render();
+  }
+  function endReplay() {
+    if (!replay) return;
+    replay = null;
+    fxPrev = null; seen = new Set();
+    render();
+    schedule();
+  }
+  /** What happened at replay step i, in words. */
+  function replayLine() {
+    const s = S();
+    if (replay.i === 0) return "The deal";
+    const prev = replay.states[replay.i - 1];
+    const e = s.log[prev.log.length];
+    if (!e) return "";
+    const who = s.seats[e.seat].name, you = e.seat === 0 && who === "You";
+    const v = (w) => (you ? w : w === "raise" ? "raises" : w + "s");
+    let t = `${esc(who)} ${e.type === "raise" ? `${v("raise")} to ${fmt(e.to)}` : e.type === "bet" ? `${v("bet")} ${fmt(e.to)}` : e.type === "call" ? `${v("call")} ${fmt(e.amount)}` : v(e.type)}`;
+    if (s.street === "done" && s.result) t += " · " + (resNow || "");
+    return t;
   }
 
   function schedule() {
     clearTimeout(timer);
     const my = ++gen;
-    if (!G || !G.state || G.online) return;
+    if (!G || !G.state || G.online || replay) return;
     const s = S();
     if (s.street === "done") {
       if (!G.recorded) recordHand();
+      profileCheck();
       // tournament: you're out
       if (s.cfg.format === "tourney" && s.seats[0].out && !G.toldOut) { G.toldOut = true; save(); setTimeout(() => my === gen && offerOut(), 900); }
       if (UI.Store.data.settings.autoNext && !s.over && s.seats[0].stack > 0) timer = setTimeout(() => { if (my === gen) dealNext(); }, 2600);
@@ -206,7 +303,47 @@
     if (h.length > 150) h.length = 150;
     const st = UI.Store.data.stats;
     st.hands++; st.net += rec.net;
+    // for My stats: hands this game, biggest pot you won (in big blinds), best hand you won with
+    G.hands = (G.hands || 0) + 1;
+    const mine = wonBy(s, 0);
+    if (mine > 0) {
+      G.bigPot = Math.max(G.bigPot || 0, Math.round(mine / s.bb));
+      if (!s.result.byFold && s.result.scores[0] !== undefined) G.best = Math.max(G.best || 0, P.category(s.result.scores[0]));
+    }
     save();
+  }
+
+  // ================================================================ My stats (js/profile.js + js/profile-holdem.js)
+  /** One finished game -> the profile, once. */
+  function profileRecord(g) {
+    const PR = root.Profile, HP = root.HoldemProfile;
+    if (!PR || !HP || !G || G.online || G.profiled) return;
+    G.profiled = true;
+    const s = G.state;
+    const r = HP.result(Object.assign({
+      format: s.cfg.format, levels: s.seats.filter((p) => p.kind === "bot").map((p) => p.level), players: s.seats.length,
+      bigPot: G.bigPot || 0, best: G.best || 0, helped: !!G.helped, daily: !!G.daily,
+    }, g));
+    try { PR.recordResult(G.daily ? Object.assign(r, { date: G.daily }) : r); } catch (e) { /* the kit never throws; belt and braces */ }
+    save();
+  }
+  /** Tournament: your finishing place is known once you're out or the table is down to you. */
+  function profileCheck() {
+    if (!G || G.online || G.profiled || !G.state) return;
+    const s = G.state;
+    if (s.cfg.format !== "tourney") return;
+    if (s.seats[0].out) profileRecord({ place: s.seats[0].place });
+    else if (s.over && s.winner === 0) profileRecord({ place: 1 });
+  }
+  /** Cash game: leaving the table ends the session (10 hands or more count). A Daily left early counts as a loss. */
+  function recordSession() {
+    if (!G || G.online || G.profiled || !G.state) return;
+    const s = G.state;
+    if (s.cfg.format === "cash" && (G.hands || 0) >= 10) {
+      const me = s.seats[0];
+      const net = me.stack - s.cfg.startStack * me.buyIns - (me.topup || 0);
+      profileRecord({ netBB: net / s.cfg.bb });
+    } else if (s.cfg.format === "tourney" && G.daily && (G.hands || 0) > 0) profileRecord({ place: 0 });
   }
 
   function allInLuck(s) {
@@ -280,7 +417,7 @@
     s.seats.forEach((p, k) => {
       const [x, y] = seatXY(k, n, k === 0, W);
       const hero = k === 0;
-      const showCards = hero || resShown.has(p.i);
+      const showCards = hero || resShown.has(p.i) || (!!replay && p.hole.length > 0);
       // cards lie on the felt pointing at their owner: 0 deg for you, 180 across the table, 90 at the ends
       const theta = Math.round(Math.atan2(-(x - 50) * W, (y - 47) * H) * 180 / Math.PI);
       const keepCards = hero || !p.folded || foldingNow.has(p.i);
@@ -309,7 +446,7 @@
         ${hero ? `<div class="hole">${cards}</div>${myStack ? `<div class="stk mine">${myStack}</div>` : ""}` : ""}
         <div class="plate">${tag}<span class="av" style="--lv:${LEVEL_COLOR[lvl] || "#999"}">${esc(Array.from(p.name || "?")[0] || "?")}</span>
           <span><div class="nm">${esc(p.name)}</div><div class="st">${p.out ? (p.place ? ordinal(p.place) : "out") : fmt(shownStack)}</div></span></div>
-        ${s.toAct === p.i && p.kind === "bot" ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
+        ${s.toAct === p.i && p.kind === "bot" && !replay ? `<div class="think"><i></i><i></i><i></i></div>` : ""}
         ${hero && p.i === s.button ? `<div class="dealer"><span>${wide ? "DEALER" : "D"}</span></div>` : ""}
       </div>`;
       if (!hero && !p.out && (cards || myStack)) {
@@ -391,6 +528,7 @@
     const logEl = el.querySelector("#sideLog");
     if (logEl) logEl.scrollTop = logEl.scrollHeight; // the latest action is always in view
     if (plan) TF.run(plan, { dom: { anim: (a) => fxAnim(a, oldBets) }, celebrateOpts: (kind) => ({ colors: FX_COLORS, at: kind === "big" ? el.querySelector(".pot") : null }) });
+    if (root.COACH && G && G.tutorial) root.COACH.update(); // the guided game's steps follow the table at once
   }
 
   /** Long names, big numbers or a narrow screen can push an end seat's name plate (and its tag) past the edge:
@@ -661,6 +799,12 @@
     const need = L && L.toCall > 0 ? L.callAmount / (L.pot + L.callAmount) : null;
     const name = me.hole.length && s.board.length >= 3 ? P.describe(P.evaluate(me.hole, 2, s.board, s.board.length)) : me.hole.length ? P.handClass(me.hole[0], me.hole[1]) : "";
     let html = "";
+    if (replay) {
+      hud.innerHTML = `<span class="hname rp-line">${replayLine()}</span>`;
+      const side0 = el.querySelector("#sideOdds");
+      if (side0) side0.innerHTML = `<div class="muted">Replay · every hand face up</div>`;
+      return;
+    }
     if (hintText) html = `<div class="hint-pop" style="flex:1">${hintText}</div>`;
     else if (set.overlay && me.hole.length && !me.folded && s.street !== "done") {
       const r = heroEquity(s);
@@ -676,6 +820,7 @@
       html = (resNow ? `<div class="hud-res">${resNow}</div>` : "") + `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
     } else html = `<span class="hname">${me.folded ? "You folded" : esc(name)}</span>`;
     if (set.hints && s.toAct === 0 && !hintText) html += `<button class="btn small" data-hint>Hint</button>`;
+    if (set.undo !== false && undoIndex() >= 0) html += `<button class="btn small" data-undo>Undo</button>`;
     hud.innerHTML = html;
     const side = el.querySelector("#sideOdds");
     if (side) {
@@ -692,10 +837,20 @@
   function renderActions() {
     const box = el.querySelector("#actions");
     const s = S();
+    if (replay) {
+      const last = replay.i === replay.states.length - 1;
+      box.innerHTML = `<div class="sizer"><span class="muted rp-step">${replay.i + 1}/${replay.states.length}</span></div><div class="act-row">
+        <button class="btn" data-rp="-1" ${replay.i ? "" : "disabled"}>Back</button>
+        <button class="btn${last ? "" : " primary"}" data-rp="1" ${last ? "disabled" : ""}>Next</button>
+        <button class="btn${last ? " primary" : ""}" data-rpclose>Done</button></div>`;
+      return;
+    }
     if (s.street === "done" || s.street === "idle") {
       const busted = s.seats[0].stack === 0;
       const over = s.over || (s.cfg.format === "tourney" && s.seats[0].out);
-      box.innerHTML = `<div class="sizer"></div><div class="act-row" style="grid-template-columns:1fr 1.5fr">
+      const canReplay = !G.online && preOk() && s.street === "done";
+      box.innerHTML = `<div class="sizer"></div><div class="act-row" style="grid-template-columns:${canReplay ? "1fr 1fr 1.5fr" : "1fr 1.5fr"}">
+        ${canReplay ? `<button class="btn" data-replay>Replay</button>` : ""}
         ${G.online ? `<button class="btn" data-oleaveask>Leave table</button>` : `<button class="btn" data-study>Study hand</button>`}
         ${over ? `<button class="btn primary" data-newgame>New game</button>` : busted ? `<button class="btn warm" data-rebuy>Buy back in</button>` : `<button class="btn primary" data-next>Next hand</button>`}</div>`;
       return;
@@ -751,6 +906,12 @@
     if (b.dataset.lvl) { st.level = b.dataset.lvl; UI.Store.save(); renderSetup(); return; }
     if (b.dataset.set) { const v = b.dataset.v; st[b.dataset.set] = isNaN(+v) ? v : +v; UI.Store.save(); renderSetup(); return; }
     if (b.dataset.start !== undefined) { startGame(); return; }
+    if (b.dataset.daily !== undefined) { startDaily(); return; }
+    if (b.dataset.mystats !== undefined) { root.Profile.openPanel(); return; }
+    if (b.dataset.undo !== undefined) { undo(); return; }
+    if (b.dataset.replay !== undefined) { startReplay(); return; }
+    if (b.dataset.rp) { stepReplay(+b.dataset.rp); return; }
+    if (b.dataset.rpclose !== undefined) { endReplay(); return; }
     if (b.dataset.next !== undefined) { dealNext(); return; }
     if (b.dataset.newgame !== undefined) { newGame(); return; }
     if (b.dataset.rebuy !== undefined) { rebuyHero(); return; }
@@ -758,6 +919,7 @@
     if (b.dataset.hint !== undefined) {
       const h = B.hint(E.view(S(), 0));
       hintText = `Hard computer: <b>${esc(h.label)}</b> — ${esc(h.why)}`;
+      if (G && !G.online && !G.helped) { G.helped = true; save(); }
       renderHud();
       return;
     }
@@ -816,12 +978,16 @@
       <div style="display:grid;gap:8px">
         <button class="btn" data-m="new">New table…</button>
         ${s && s.cfg.format === "cash" && s.seats[0].stack < s.cfg.startStack && (s.street === "done") ? `<button class="btn" data-m="topup">Top up to ${fmt(s.cfg.startStack)}</button>` : ""}
+        ${root.Profile ? `<button class="btn" data-m="stats">My stats</button>` : ""}
+        ${root.COACH && root.HoldemCoach ? `<button class="btn" data-m="rules">Rules</button>` : ""}
         <button class="btn" data-help="strength">How strong are the computers?</button>
       </div><div class="row"><button class="btn ghost" data-close>Close</button></div>`, (body) => {
       body.addEventListener("click", (e) => {
         const m = e.target.closest("[data-m]");
         if (!m) return;
         if (m.dataset.m === "new") { Sheet.close(); newGame(); }
+        if (m.dataset.m === "stats") { Sheet.close(); root.Profile.openPanel(); }
+        if (m.dataset.m === "rules") { Sheet.close(); if (root.App.openRules) root.App.openRules(); }
         if (m.dataset.m === "topup") {
           // Top up adds only the missing chips, and counts only those as money put in.
           const st = S(), me = st.seats[0], add = st.cfg.startStack - me.stack;
@@ -836,6 +1002,8 @@
   function newGame() {
     if (G && G.online) { root.OnlinePlay.leave(); return; }
     clearTimeout(timer); gen++;
+    recordSession();
+    replay = null;
     G = null; UI.Store.data.game = null; UI.Store.save();
     render();
   }
@@ -889,11 +1057,44 @@
   function sync() {
     if (!el || (G && G.online)) return;
     clearTimeout(timer); gen++;
+    replay = null;
     G = UI.Store.data.game;
     hintText = "";
     render();
     schedule();
   }
 
-  root.PlayTab = { init, render: () => { render(); }, newGame, setOnline, sync };
+  /** Today's Daily game (the same deal and computers for everyone today), from My stats or the setup screen. */
+  function startDaily() {
+    const PR = root.Profile, HP = root.HoldemProfile;
+    if (!PR || !HP) return;
+    if (G && G.online) { UI.toast("Leave the online table first"); return; }
+    const day = PR.daily.date();
+    if (G && G.daily === day && G.state && !G.profiled) { PR.closePanel(); root.App.go("play"); UI.toast("Your Daily game is on the table"); return; }
+    if (PR.daily.played(day)) { PR.openPanel({ tab: "daily" }); return; }
+    PR.closePanel();
+    Sheet.close();
+    const d = HP.dailySetup(PR.daily.seed(day));
+    root.App.go("play");
+    clearTimeout(timer); gen++;
+    startGame(Object.assign(d, { daily: day }));
+  }
+  /** The guided first game: you and one Easy computer, a stacked first hand (js/coach-holdem.js). */
+  function startTutorial() {
+    if (G && G.online) { UI.toast("Leave the online table first"); return; }
+    const HC = root.HoldemCoach;
+    if (!HC) return;
+    Sheet.close();
+    root.App.go("play");
+    clearTimeout(timer); gen++;
+    startGame({ levels: ["easy"], seed: HC.SEED, betting: "nl", format: "cash", stack: 100, ante: "none", tutorial: true });
+  }
+
+  root.PlayTab = {
+    init, render: () => { render(); }, newGame, setOnline, sync, startDaily, startTutorial,
+    state: () => (G && !G.online && !replay ? G.state : null),
+    isTutorial: () => !!(G && G.tutorial && !G.online),
+    busy: () => !!replay || !!(G && G.state && !G.online && G.state.street !== "done" && G.state.street !== "idle"),
+    online: () => !!(G && G.online) || !!onlineScreen,
+  };
 })(this);

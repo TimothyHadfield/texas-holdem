@@ -365,6 +365,13 @@ body { --back: #1f4e8c; }
 .setup { flex: 1; display: flex; flex-direction: column; padding: 10px 16px; gap: 10px; max-width: 560px; width: 100%; margin: 0 auto; }
 .setup h2 { margin: 0; font-size: 21px; }
 @media (min-width: 900px) and (min-height: 700px) { .setup { justify-content: center; gap: 14px; } .setup h2 { font-size: 26px; } }
+.setup-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.setup-head .pf-open { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
+.setup-head .pf-open svg { flex: none; border-radius: 50%; }
+.setup-more { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.setup-more .btn:only-child { grid-column: 1 / -1; }
+.rp-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-step { font-size: 13px; }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .field > .label { flex: none; }
 .field .seg { flex: 1; max-width: 330px; }

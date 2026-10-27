@@ -244,6 +244,7 @@
 
     // ------------------------------------------------------------ HARD
     const pos = seatPos(v, me);                  // 0 early .. 1 button
+    if (v.cfg && v.cfg.betting === "fl") return out(...hardLimit(v, L, p, me, opps, eq, potOdds, pct, rand, pos));
     if (pre) {
       const raisers = v.log.filter((e) => e.street === "preflop" && e.type === "raise").length;
       if (raisers === 0) {
@@ -278,6 +279,51 @@
     if (draw && eq >= potOdds - implied && rand() < 0.15 && L.canRaise) return out(raise(0.8), "Semi-bluff raise");
     if (eq + implied >= potOdds + 0.02) return out(act("call"), "Odds justify a call");
     return out(act("fold"), "Behind what they bet with");
+  }
+
+  // ------------------------------------------------------------ HARD, fixed limit
+  /** Limit poker rewards a different style: every bet is small next to the pot, so folding a hand
+   *  that might be best costs more than calling, thin value bets pay, and heads-up you raise most hands.
+   *  Returns [action, why]. */
+  function hardLimit(v, L, p, me, opps, eq, potOdds, pct, rand, pos) {
+    const n = opps.length;
+    const bb = v.bb;
+    const hu = v.seats.filter((q) => q.hole.length).length === 2;
+    const fair = 1 / (n + 1);
+    const callOr = () => (L.toCall === 0 ? act("check") : act("call"));
+    const foldOr = () => (L.toCall === 0 ? act("check") : act("fold"));
+    const raise = () => (L.canRaise ? act("raise", L.minTo) : callOr());
+    if (v.street === "preflop") {
+      const raisers = v.log.filter((e) => e.street === "preflop" && e.type === "raise").length;
+      if (raisers === 0) {
+        const limpers = opps.filter((q) => q.bet >= bb && q.i !== v.bbSeat).length;
+        const openPct = hu ? (me === v.bbSeat ? 0.38 : 0.82) : 0.16 + 0.3 * pos + 0.05 * limpers;
+        if (pct <= openPct) return [raise(), "Raise first in from this seat"];
+        if (L.toCall === 0) return [act("check"), "Free look"];
+        if (me === v.sbSeat && pct <= (hu ? 0.9 : 0.55)) return [act("call"), "Cheap from the small blind"];
+        return [act("fold"), "Too weak for this seat"];
+      }
+      const reraise = hu ? (raisers === 1 ? 0.2 : 0.1) : raisers === 1 ? 0.07 : 0.035;
+      if (pct <= reraise) return [raise(), "Re-raise: ahead of their range"];
+      const defend = hu ? (raisers === 1 ? 0.72 : 0.4) : me === v.bbSeat && raisers === 1 ? 0.45 : raisers === 1 ? 0.24 : 0.12;
+      if (pct <= defend || eq >= potOdds + 0.03) return [callOr(), "Price is right vs their range"];
+      return [foldOr(), "Behind their range"];
+    }
+    const streetLeft = v.street === "flop" ? 2 : v.street === "turn" ? 1 : 0;
+    const draw = streetLeft > 0 && hasDraw(p.hole, v.board);
+    const preRaiser = (() => { const r = v.log.filter((e) => e.street === "preflop" && e.type === "raise"); return r.length ? r[r.length - 1].seat : -1; })();
+    if (L.toCall === 0) {
+      if (eq >= (n === 1 ? 0.52 : Math.max(0.5, fair + 0.22))) return [raise(), "Value bet"];
+      if (draw && rand() < 0.6) return [raise(), "Semi-bluff with a draw"];
+      if (preRaiser === me && v.street === "flop" && n <= 2 && rand() < (n === 1 ? 0.7 : 0.45)) return [raise(), "Continuation bet"];
+      return [act("check"), "Check"];
+    }
+    // facing a bet: limit pots lay a big price, so call down lighter (implied odds for draws on the flop)
+    const implied = draw ? (streetLeft === 2 ? 0.05 : 0.02) : 0;
+    if (eq >= (n === 1 ? 0.64 : 0.72)) return [raise(), "Raise for value"];
+    if (draw && streetLeft === 2 && n === 1 && rand() < 0.3 && L.canRaise) return [raise(), "Semi-bluff raise"];
+    if (eq + implied >= potOdds - (n === 1 ? 0.04 : 0.01)) return [act("call"), "Odds justify a call"];
+    return [act("fold"), "Behind what they bet with"];
   }
 
   // ------------------------------------------------------------ hint (for the human)

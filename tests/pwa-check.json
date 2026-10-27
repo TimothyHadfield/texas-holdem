@@ -1,0 +1,10 @@
+{
+  "repo": "texas-holdem",
+  "ready": "!!(window.PlayTab && window.App && document.querySelector('#tabs [data-tab=play]'))",
+  "play": [
+    "(async () => { const w = ms => new Promise(r => setTimeout(r, ms)); document.querySelector('#tabs [data-tab=play]').click(); await w(300); const s = document.querySelector('[data-start]'); if (s) s.click(); for (let i = 0; i < 150; i++) { const st = PlayTab.state(); if (st && st.toAct === 0 && st.street !== 'done' && document.querySelector('[data-act=call]:not([disabled])')) break; await w(100); } await w(800); window.__logBefore = PlayTab.state().log.length; document.querySelector('[data-act=call]').click(); })()"
+  ],
+  "played": "(() => { const st = PlayTab.state(); return !!st && (st.street === 'done' || (st.toAct === 0 && st.log.length >= window.__logBefore + 2)); })()",
+  "safe": "document.querySelector('#tabs [data-tab=settings]').click()",
+  "debug": "JSON.stringify((() => { const st = PlayTab.state(); return st ? { n: st.log.length, before: window.__logBefore, toAct: st.toAct, street: st.street } : null; })())"
+}

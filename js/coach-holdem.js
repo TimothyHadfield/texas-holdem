@@ -71,8 +71,15 @@
           <li><b>Pot limit</b>: at most the size of the pot after you call.</li>
           <li><b>Limit</b>: fixed bets: one big blind before the flop and on the flop, two on the turn and river; a bet and three raises per round.</li></ul>` },
         { id: "games", short: "Games", title: "Cash game or tournament", html: `<ul><li><b>Cash</b>: blinds stay the same; if you run out you can buy back in.</li>
-          <li><b>Tournament</b>: everyone starts equal and the blinds go up every 10 hands. Run out and you're out; the last player with chips wins.</li>
+          <li><b>Tournament</b>: everyone starts equal and the blinds go up every 10 hands (Settings can change this). Run out and you're out; the last player with chips wins.</li>
           <li><b>Antes</b> (optional): a small extra bet from everyone, or one from the big blind for the table.</li></ul>` },
+        { id: "types", short: "Game types", title: "Other game types", html: `<p>Pick one under <b>Type</b> when you set up a table. Everything else works like Texas Hold'em.</p>
+          <ul><li><b>Short deck</b>: the 2s to 5s are taken out (36 cards). A <b>flush beats a full house</b>, and A-6-7-8-9 is the lowest straight.</li>
+          <li><b>Pineapple</b>: three cards each. After the betting before the flop, everyone throws one away face down.</li>
+          <li><b>Crazy Pineapple</b>: the same, but you throw one away after the betting on the flop.</li>
+          <li><b>Omaha</b>: four cards each. Your hand must use <b>exactly two</b> of yours and three from the board. Usually played pot limit.</li></ul>
+          <p class="tip">Online tables always play Texas Hold'em.</p>` },
+        { id: "videos", short: "Videos", title: "Videos", html: `<ul><li><a href="https://www.youtube.com/watch?v=96ncBKvX7QE" target="_blank" rel="noopener">How To Play Texas Hold &#39;Em</a><br><small>Puzzling Games · rules and sample hands</small></li><li><a href="https://www.youtube.com/watch?v=ep1riICX-KU" target="_blank" rel="noopener">Poker in 5 Minutes</a><br><small>Play-In Games · the quick version</small></li><li><a href="https://www.youtube.com/watch?v=epZT3ErVNP8" target="_blank" rel="noopener">Starting Hands in Texas Hold&#39;em</a><br><small>CardsChat · what to play and how</small></li><li><a href="https://www.youtube.com/watch?v=xK1gsPax1ys" target="_blank" rel="noopener">How To Play Short Deck Hold&#39;em</a><br><small>ClubMikeV · the 36-card game</small></li><li><a href="https://www.youtube.com/watch?v=6YKTm5lWEy4" target="_blank" rel="noopener">How to Play Pot Limit Omaha</a><br><small>Card Player · rules and strategy</small></li></ul>` },
       ],
     };
   }

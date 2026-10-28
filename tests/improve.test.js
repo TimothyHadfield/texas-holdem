@@ -77,7 +77,9 @@ for (const betting of ["nl", "pl", "fl"]) {
   ok(s.toAct === 0, "tutorial: you act first before the flop");
   ok(HC.steps({ state: () => s, overlay: () => true }).length === 11, "tutorial has 11 steps");
   const R = HC.rules();
-  ok(R.sections.length === 8 && R.sections.every((x) => x.id && x.title && x.html), "rules sheet: 8 sections, all filled");
+  ok(R.sections.length === 10 && R.sections.every((x) => x.id && x.title && x.html), "rules sheet: 10 sections, all filled");
+  const vids = R.sections.find((x) => x.id === "videos").html.match(/<a [^>]+>/g) || [];
+  ok(vids.length >= 2 && vids.length <= 5 && vids.every((t) => /href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}"/.test(t) && /target="_blank"/.test(t) && /rel="noopener"/.test(t)), `rules sheet: ${vids.length} YouTube links open in a new tab`);
 }
 
 // ---- profile: results, daily, ratings

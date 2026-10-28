@@ -379,6 +379,74 @@ body { --back: #1f4e8c; }
 .lvl-grid button { border: 1px solid var(--line); background: var(--bg-soft); border-radius: 10px; padding: 8px 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .lvl-grid button small { display: block; font-weight: 600; font-size: 11px; margin-top: 2px; }
 .lvl-grid button.on { border-color: var(--accent); color: var(--text); background: rgba(110,168,254,.12); }
+.setup-start { min-height: 52px; font-size: 17px; }
+/* game type: one row that opens a list (each type with one line about it) */
+.type-pick { flex: 1; max-width: 330px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-soft); color: var(--text); font-size: 13px; font-weight: 650; }
+.type-pick i { font-style: normal; color: var(--muted); font-size: 11px; }
+.type-list { display: grid; gap: 6px; }
+.type-opt { display: block; text-align: left; border: 1px solid var(--line); background: var(--bg-soft); border-radius: 10px; padding: 9px 12px; color: var(--text); }
+.type-opt b { font-size: 15px; }
+.type-opt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; line-height: 1.3; }
+.type-opt.on { border-color: var(--accent); background: rgba(110,168,254,.12); }
+/* a short phone (iPhone SE): tighter rows so "Deal me in" is on screen without scrolling; the format note is behind the ? */
+@media (max-width: 899px) and (orientation: portrait) and (max-height: 740px) {
+  .setup { gap: 7px; padding-top: 8px; padding-bottom: 8px; }
+  .setup h2 { font-size: 19px; }
+  .setup-head .pf-open { min-height: 30px; }
+  .setup .seg button { min-height: 30px; padding-top: 5px; padding-bottom: 5px; }
+  .setup .type-pick { min-height: 38px; }
+  .setup .stepper button { height: 32px; }
+  .setup .f-str .label { margin-bottom: 4px !important; }
+  .setup .lvl-grid button { padding: 6px 2px; }
+  .setup-note { display: none; }
+  .setup-start { min-height: 46px; }
+  .setup-more .btn { min-height: 40px; padding-top: 6px; padding-bottom: 6px; white-space: nowrap; font-size: 14px; }
+}
+@media (max-width: 899px) and (orientation: portrait) and (max-height: 600px) {
+  .setup { gap: 6px; }
+  .setup .lvl-grid button small { display: none; }
+  .setup .lvl-grid button { padding: 7px 2px; }
+  .setup .seg button { min-height: 28px; padding-top: 4px; padding-bottom: 4px; }
+  .setup .type-pick { min-height: 34px; }
+  .setup-start { min-height: 44px; }
+}
+/* a phone on its side: two columns, "Deal me in" across the bottom */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  .setup:not(.online) { display: grid; max-width: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; row-gap: 4px; padding: 4px 14px; align-content: start;
+    grid-template-areas: "head more" "comp bet" "str game" "str chips" "type ante" "start start"; }
+  .setup .setup-head { grid-area: head; } .setup .setup-more { grid-area: more; } .setup .f-comp { grid-area: comp; } .setup .f-str { grid-area: str; }
+  .setup .f-type { grid-area: type; } .setup .f-bet { grid-area: bet; } .setup .f-game { grid-area: game; } .setup .f-chips { grid-area: chips; } .setup .f-ante { grid-area: ante; } .setup .setup-start { grid-area: start; }
+  .setup h2 { font-size: 17px; }
+  .setup-head .pf-open, .setup-more .btn { min-height: 30px; padding-top: 4px; padding-bottom: 4px; white-space: nowrap; font-size: 13.5px; }
+  .setup .seg { padding: 2px; }
+  .setup .seg button { min-height: 28px; padding: 4px 6px; }
+  .setup .type-pick { min-height: 32px; }
+  .setup .stepper button { height: 30px; }
+  .setup .f-str .label { margin-bottom: 3px !important; }
+  .setup .lvl-grid button { padding: 5px 2px; }
+  .setup-note { display: none; }
+  .setup-start { min-height: 40px; font-size: 16px; }
+}
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 359px) {
+  .setup .lvl-grid button small { display: none; }
+  .setup .lvl-grid button { padding: 7px 2px; }
+}
+/* Pineapple / Omaha: three or four cards fanned in your hand, and in front of the others */
+.seat.hero.h3 .hole .cd + .cd { margin-left: calc(var(--w) * -.38); rotate: 0deg; translate: 0 1px; }
+.seat.hero.h3 .hole .cd:last-child { rotate: 6deg; translate: 0 3px; }
+.seat.hero.h4 .hole .cd { --w: clamp(38px, 10vw, 52px); }
+.seat.hero.h4 .hole .cd + .cd { margin-left: calc(var(--w) * -.5); rotate: -2deg; translate: 0 1px; }
+.seat.hero.h4 .hole .cd:nth-child(3) { rotate: 3deg; translate: 0 2px; }
+.seat.hero.h4 .hole .cd:last-child { rotate: 8deg; translate: 0 4px; }
+.spot.h3 .hole .cd + .cd, .spot.h4 .hole .cd + .cd { margin-left: calc(var(--w) * -.62); }
+.spot.h3 .hole.up .cd + .cd, .spot.h4 .hole.up .cd + .cd { margin-left: calc(var(--w) * -.5); }
+/* not your turn: who's acting, the pot and your price (keeps the row's height, so the buttons never jump) */
+.wait { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; color: var(--text); }
+.wait .who { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wait .who i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--lv); }
+.wait .spacer { flex: 1; }
+.wait .sep { color: var(--muted); }
+.act-row .btn.discard { font-size: 17px; font-weight: 800; }
 
 /* ================================================================ ODDS */
 .odds-wrap { flex: 1; display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0, 1fr); min-height: 0; min-width: 0; }

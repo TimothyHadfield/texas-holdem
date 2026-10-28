@@ -62,7 +62,7 @@
     const dealt = h.seats.map((p, i) => ({ p, i })).filter((x) => x.p.dealt);
     const rows = dealt.map(({ p, i }) => {
       const won = r.net[i] + (p.start - p.end + r.net[i] === 0 ? 0 : 0);
-      const name = h.board.length === 5 ? P.describe(P.evaluate(p.hole, 2, h.board, 5)) : "";
+      const name = h.board.length === 5 && p.hole.length ? P.describeFor(P.score(h.game || "holdem", p.hole, h.board), h.game) : "";
       const delta = p.end - p.start;
       void won;
       return `<tr><td><span style="color:${COLORS[i % COLORS.length]}">●</span> ${esc(p.name)}${p.level ? ` <span class="muted" style="font-size:11px">${p.level}</span>` : ""}${i === h.button ? ` <span class="muted">(D)</span>` : ""}</td>
@@ -97,6 +97,9 @@
     luckEl.textContent = fmt(lost);
   }
 
+  /** Omaha scores 60 five-card hands per player: fewer random deals keep Study quick. */
+  const trialsFor = (h, n) => (h.game === "omaha" ? n / 4 : n);
+
   /** Equity of every dealt player at each street (hindsight, all cards known). */
   function streetEquities(h) {
     if (h.eqs) return h.eqs;
@@ -106,7 +109,7 @@
     for (const e of h.log) if (e.type === "fold") foldStreet[e.seat] = ["preflop", "flop", "turn", "river"].indexOf(e.street);
     const out = streets.map(([label, n], k) => {
       const live = dealt.filter((i) => foldStreet[i] === undefined || foldStreet[i] >= k);
-      const eqs = live.length > 1 ? P.allEquities(live.map((i) => h.seats[i].hole), h.board.slice(0, n), [], { trials: 6000, exactLimit: 250000, seed: 7 }) : live.map(() => 1);
+      const eqs = live.length > 1 ? P.allEquitiesFor(h.game, live.map((i) => h.seats[i].hole), h.board.slice(0, n), [], { trials: trialsFor(h, 6000), exactLimit: 250000, seed: 7 }) : live.map(() => 1);
       const m = {};
       live.forEach((i, j) => { m[i] = eqs[j]; });
       return { label, m };
@@ -141,8 +144,8 @@
   /** EV of every option at one decision. Computes once, caches on the record. */
   function evFor(h, d) {
     if (!d.ev) {
-      const known = P.equity({ hero: d.hole, board: d.board, opponents: Math.max(1, d.opp), trials: 6000, exactLimit: 200000, seed: 11 }).equity;
-      const real = P.allEquities([d.hole].concat(d.live.map((i) => h.seats[i].hole)), d.board, [], { trials: 6000, exactLimit: 250000, seed: 13 })[0];
+      const known = P.equityFor(h.game, { hero: d.hole, board: d.board, opponents: Math.max(1, d.opp), trials: trialsFor(h, 6000), exactLimit: 200000, seed: 11 }).equity;
+      const real = P.allEquitiesFor(h.game, [d.hole].concat(d.live.map((i) => h.seats[i].hole)), d.board, [], { trials: trialsFor(h, 6000), exactLimit: 250000, seed: 13 })[0];
       const opts = [];
       const evOf = (eq, kind, to) => {
         if (kind === "fold") return 0;

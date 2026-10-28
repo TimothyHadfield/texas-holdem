@@ -30,6 +30,77 @@
   })();
   const pctOf = (c1, c2) => PCT[P.CLASS_INDEX[P.handClass(c1, c2)]];
 
+  // ------------------------------------------------------------ other game types
+  /* Every level plays every game type with the same logic; only the hand-strength inputs change:
+     pct (0 = best starting hand .. 1 = worst) and the hand scorer. */
+  const gameOf = (v) => (v.cfg && v.cfg.game) || "holdem";
+  const memo = {};
+  /** Short deck: heads-up all-in equity of each 2-card class against a random hand, measured once. */
+  function shortPct() {
+    if (memo.short) return memo.short;
+    const rand = P.rng32(2024), deck = P.deckFor("short");
+    const classes = {};
+    for (let i = 0; i < deck.length; i++) for (let j = i + 1; j < deck.length; j++) {
+      const k = P.handClass(deck[i], deck[j]);
+      (classes[k] = classes[k] || []).push([deck[i], deck[j]]);
+    }
+    const eqs = Object.keys(classes).map((k) => [k, P.equityFor("short", { hero: classes[k][0], opponents: 1, trials: 700, rng: rand }).equity, classes[k].length]);
+    eqs.sort((a, b) => b[1] - a[1]);
+    const total = eqs.reduce((a, e) => a + e[2], 0);
+    const out = {};
+    let acc = 0;
+    for (const [k, , n] of eqs) { acc += n; out[k] = acc / total; }
+    return (memo.short = out);
+  }
+  /** A quick strength number for 3- and 4-card hands (lower = better): Pineapple keeps its best two-card
+   *  Hold'em hand; Omaha's six two-card pairs all work together, so the best three of them count. */
+  function rawMulti(hole) {
+    const ps = [];
+    for (let i = 0; i < hole.length; i++) for (let j = i + 1; j < hole.length; j++) ps.push(pctOf(hole[i], hole[j]));
+    ps.sort((a, b) => a - b);
+    if (hole.length === 3) return ps[0] - 0.04 * (1 - ps[1]);
+    // Omaha: the best three pairs; three or four of a rank wastes cards
+    const r = hole.map((c) => c >> 2), same = Math.max(...r.map((x) => r.filter((y) => y === x).length));
+    return (ps[0] + ps[1] + ps[2]) / 3 + (same >= 3 ? 0.25 : 0);
+  }
+  /** Percentile of rawMulti among random hands of that size (sampled once). */
+  function multiTable(k) {
+    if (memo[k]) return memo[k];
+    const rand = P.rng32(99 + k), d = P.deckFor("holdem"), out = new Float64Array(6000);
+    for (let t = 0; t < out.length; t++) {
+      for (let i = 0; i < k; i++) { const j = i + Math.floor(rand() * (52 - i)); const x = d[i]; d[i] = d[j]; d[j] = x; }
+      out[t] = rawMulti(d.slice(0, k));
+    }
+    out.sort();
+    return (memo[k] = out);
+  }
+  /** Starting-hand percentile (0 = best) for any game type and any number of hole cards. */
+  function pctHand(hole, game) {
+    if (hole.length === 2) return game === "short" ? shortPct()[P.handClass(hole[0], hole[1])] : pctOf(hole[0], hole[1]);
+    const t = multiTable(hole.length), x = rawMulti(hole);
+    let lo = 0, hi = t.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (t[m] < x) lo = m + 1; else hi = m; }
+    return lo / t.length;
+  }
+  /** Which card to throw away (Pineapple / Crazy Pineapple). */
+  function chooseDiscard(v, level, rand) {
+    const me = v.toAct, hole = v.seats[me].hole, game = gameOf(v);
+    const keep = (k) => hole.filter((c, j) => j !== k);
+    let best = 0, bestV = -Infinity;
+    for (let k = 0; k < hole.length; k++) {
+      const h = keep(k);
+      let val;
+      if (level === "easy") val = v.board.length >= 3 ? P.score(game, h, v.board) : (h[0] >> 2) + (h[1] >> 2); // keeps big cards / the made hand
+      else if (v.board.length < 3) val = -pctOf(h[0], h[1]);
+      else {
+        const n = Math.max(1, v.seats.filter((q) => q.i !== me && !q.folded).length);
+        val = P.equity({ hero: h, board: v.board, dead: [hole[k]], opponents: n, trials: level === "hard" ? 500 : 250, rng: rand, forceMC: true }).equity;
+      }
+      if (val > bestV) { bestV = val; best = k; }
+    }
+    return { action: { type: "discard", card: hole[best] }, eq: 0, potOdds: 0, why: "Keeps the best two" };
+  }
+
   const LEVELS = {
     easy:   { name: "Easy",   trials: 120 },
     medium: { name: "Medium", trials: 250 },
@@ -59,14 +130,14 @@
   }
 
   /** Does this hand fit a bet on that board? Made pair+ or a real draw = yes, else sometimes (bluffs). */
-  function fitsBet(hole, board, rand) {
-    const cat = P.category(P.evaluate(hole, 2, board, board.length));
+  function fitsBet(hole, board, rand, game) {
+    const cat = board.length >= 3 ? P.stdCategory(P.score(game, hole, board), game) : 0;
     if (cat >= 1) {
       // A pair that is only on the board doesn't count as "something".
       const bc = boardPairs(board);
       if (cat > bc) return true;
     }
-    if (board.length < 5 && hasDraw(hole, board)) return rand() < 0.8;
+    if (board.length < 5 && hasDraw(hole, board, game)) return rand() < 0.8;
     return rand() < 0.3;
   }
   function boardPairs(board) {
@@ -77,12 +148,13 @@
     if (vals[0] >= 3) best = 3; else if (vals[0] === 2 && vals[1] === 2) best = 2; else if (vals[0] === 2) best = 1;
     return best;
   }
-  function hasDraw(hole, board) {
+  function hasDraw(hole, board, game) {
+    if (game === "omaha") return omahaDraw(hole, board);
     const all = hole.concat(board);
     const suits = [0, 0, 0, 0];
     for (const c of all) suits[c & 3]++;
     for (let s = 0; s < 4; s++) {
-      if (suits[s] >= 4 && ((hole[0] & 3) === s || (hole[1] & 3) === s)) return true; // flush draw using my card
+      if (suits[s] >= 4 && hole.some((c) => (c & 3) === s)) return true; // flush draw using my card
     }
     let mask = 0;
     for (const c of all) mask |= 1 << (c >> 2);
@@ -98,16 +170,36 @@
     return false;
   }
 
+  /** Omaha draws must use exactly two hole cards: two of the suit in hand plus two on the board,
+   *  or a four-rank run made of two hole ranks and two board ranks. */
+  function omahaDraw(hole, board) {
+    for (let s = 0; s < 4; s++) {
+      if (hole.filter((c) => (c & 3) === s).length >= 2 && board.filter((c) => (c & 3) === s).length === 2) return true;
+    }
+    const bits = (cs) => { let m = 0; for (const c of cs) { m |= 1 << ((c >> 2) + 1); if ((c >> 2) === 12) m |= 1; } return m; };
+    const hb = bits(hole), bb = bits(board);
+    const count = (x) => { let k = 0; while (x) { k += x & 1; x >>= 1; } return k; };
+    for (let lo = 0; lo <= 10; lo++) {
+      const run = 0xf << lo;
+      const fromBoard = count(bb & run);
+      if (fromBoard === 2 && count(hb & run & ~bb) >= 2) return true;
+    }
+    return false;
+  }
+
   /**
    * Equity against opponents whose hands are sampled to fit what they did.
    * ranges: [{ top, aggro: [board,...] }] or numbers of random opponents.
    */
-  function rangeEquity(hero, board, ranges, trials, rand) {
-    const deck = P.remainingDeck(hero.concat(board));
+  function rangeEquity(hero, board, ranges, trials, rand, game) {
+    game = game || "holdem";
+    const K = hero.length;
+    const taken = new Set(hero.concat(board));
+    const deck = game === "holdem" ? P.remainingDeck(hero.concat(board)) : P.deckFor(game).filter((c) => !taken.has(c));
     const need = 5 - board.length;
     const full = new Array(5);
     for (let i = 0; i < board.length; i++) full[i] = board[i];
-    const opps = ranges.map(() => [0, 0]);
+    const opps = ranges.map(() => new Array(K));
     let share = 0;
     const d = deck.slice();
     for (let t = 0; t < trials; t++) {
@@ -120,24 +212,24 @@
       };
       for (let o = 0; o < ranges.length; o++) {
         const R = ranges[o];
-        let a, b, tries = 0;
+        const h = opps[o];
+        let tries = 0;
         while (true) {
           const save = pos;
-          a = take(); b = take();
+          for (let m = 0; m < K; m++) h[m] = take();
           if (tries++ > 25) break;
-          if (R.top < 1 && pctOf(a, b) > R.top) { pos = save; continue; }
+          if (R.top < 1 && (K === 2 && game !== "short" ? pctOf(h[0], h[1]) : pctHand(h, game)) > R.top) { pos = save; continue; }
           let fits = true;
-          for (const bd of R.aggro || []) if (!fitsBet([a, b], bd, rand)) { fits = false; break; }
+          for (const bd of R.aggro || []) if (!fitsBet(h, bd, rand, game)) { fits = false; break; }
           if (fits) break;
           pos = save;
         }
-        opps[o][0] = a; opps[o][1] = b;
       }
       for (let i = board.length; i < 5; i++) full[i] = take();
-      const h = P.evaluate(hero, 2, full, 5);
+      const h = P.score(game, hero, full);
       let best = h, ties = 1, lost = false;
       for (const o of opps) {
-        const sc = P.evaluate(o, 2, full, 5);
+        const sc = P.score(game, o, full);
         if (sc > h) { lost = true; break; }
         if (sc === h) ties++;
       }
@@ -186,22 +278,24 @@
     rand = rand || Math.random;
     const me = v.toAct;
     const L = E.legal(v);
+    if (L.discard) return chooseDiscard(v, level, rand);
+    const game = gameOf(v);
     const p = v.seats[me];
     const hole = p.hole;
     const opps = v.seats.filter((q) => q.i !== me && !q.folded);
     const n = opps.length;
     const potOdds = L.toCall > 0 ? L.callAmount / (L.pot + L.callAmount) : 0;
     const pre = v.street === "preflop";
-    const pct = pctOf(hole[0], hole[1]);
+    const pct = game === "holdem" && hole.length === 2 ? pctOf(hole[0], hole[1]) : pctHand(hole, game);
     const bb = v.bb;
 
     let eq;
     if (level === "hard" && (!pre || L.toCall > bb)) {
-      eq = rangeEquity(hole, v.board, readRanges(v, me), LEVELS.hard.trials, rand);
-    } else if (pre) {
+      eq = rangeEquity(hole, v.board, readRanges(v, me), LEVELS.hard.trials, rand, game);
+    } else if (pre && game === "holdem") {
       eq = PREFLOP[P.CLASS_INDEX[P.handClass(hole[0], hole[1])]][Math.min(8, Math.max(1, n)) - 1];
     } else {
-      eq = rangeEquity(hole, v.board, opps.map(() => ({ top: 1 })), LEVELS[level].trials, rand);
+      eq = rangeEquity(hole, v.board, opps.map(() => ({ top: 1 })), LEVELS[level].trials, rand, game);
     }
     const fair = 1 / (n + 1);               // an average hand's share
     const callOr = () => (L.toCall === 0 ? act("check") : act("call"));
@@ -244,6 +338,7 @@
 
     // ------------------------------------------------------------ HARD
     const pos = seatPos(v, me);                  // 0 early .. 1 button
+    const omaha = game === "omaha";
     if (v.cfg && v.cfg.betting === "fl") return out(...hardLimit(v, L, p, me, opps, eq, potOdds, pct, rand, pos));
     if (pre) {
       const raisers = v.log.filter((e) => e.street === "preflop" && e.type === "raise").length;
@@ -252,25 +347,25 @@
         const openPct = 0.17 + 0.3 * pos + 0.04 * limpers; // ~17% early .. ~47% on the button; wider to punish limpers
         if (pct <= openPct) return out(raise(0.75 + 0.15 * opps.filter((q) => q.bet >= bb).length), "Raise first in from this seat");
         if (L.toCall === 0) return out(act("check"), "Free look");
-        if (me === v.sbSeat && pct <= 0.5 && L.toCall <= bb) return out(act("call"), "Cheap from the small blind");
+        if (me === v.sbSeat && pct <= (omaha ? 0.85 : 0.5) && L.toCall <= bb) return out(act("call"), "Cheap from the small blind");
         return out(act("fold"), "Too weak for this seat");
       }
       // facing a raise: eq here is against the raiser's likely hands
       const needed = potOdds + (spr > 8 ? -0.04 : 0.02); // deep stacks: pairs/suited hands can call a bit lighter
       if (pct <= 0.025 || (eq >= 0.6 && pct <= 0.06)) return out(raise(1), "Re-raise: ahead of their range");
       if (raisers === 1 && pct > 0.3 && pct <= 0.4 && pos > 0.7 && rand() < 0.08) return out(raise(1), "Occasional re-raise bluff");
-      if (eq >= needed && pct <= 0.32) return out(callOr(), "Price is right vs their range");
+      if ((omaha && pct <= 0.8 && L.toCall <= 0.3 * p.stack) || eq >= needed && pct <= (omaha ? 0.6 : 0.32)) return out(callOr(), "Price is right vs their range"); // Omaha hands run close: defend wider
       return out(foldOr(), "Behind their range");
     }
     const streetLeft = v.street === "flop" ? 2 : v.street === "turn" ? 1 : 0;
-    const draw = streetLeft > 0 && hasDraw(hole, v.board);
+    const draw = streetLeft > 0 && hasDraw(hole, v.board, game);
     const iRaisedPre = v.log.some((e) => e.street === "preflop" && e.seat === me && e.type === "raise");
     const lastPreRaiser = (() => { const r = v.log.filter((e) => e.street === "preflop" && e.type === "raise"); return r.length ? r[r.length - 1].seat : -1; })();
     if (L.toCall === 0) {
-      if (eq >= Math.max(0.56, fair + 0.26)) return out(raise(eq > 0.8 ? 0.85 : 0.7), "Value bet");
-      if (draw && rand() < 0.55) return out(raise(0.5), "Semi-bluff with a draw");
-      if (iRaisedPre && lastPreRaiser === me && v.street === "flop" && n <= 2 && rand() < 0.6) return out(raise(0.4), "Continuation bet");
-      if (n === 1 && v.street === "river" && eq < 0.25 && pos > 0.6 && rand() < 0.18) return out(raise(0.6), "River bluff");
+      if (eq >= Math.max(omaha ? 0.52 : 0.56, fair + 0.26)) return out(raise(eq > 0.8 ? 0.85 : 0.7), "Value bet");
+      if (draw && rand() < (omaha ? 0.25 : 0.55)) return out(raise(0.5), "Semi-bluff with a draw");
+      if (!omaha && iRaisedPre && lastPreRaiser === me && v.street === "flop" && n <= 2 && rand() < 0.6) return out(raise(0.4), "Continuation bet");
+ if (!omaha && n === 1 && v.street === "river" && eq < 0.25 && pos > 0.6 && rand() < 0.18) return out(raise(0.6), "River bluff");
       return out(act("check"), "Check");
     }
     // facing a bet
@@ -310,7 +405,7 @@
       return [foldOr(), "Behind their range"];
     }
     const streetLeft = v.street === "flop" ? 2 : v.street === "turn" ? 1 : 0;
-    const draw = streetLeft > 0 && hasDraw(p.hole, v.board);
+    const draw = streetLeft > 0 && hasDraw(p.hole, v.board, gameOf(v));
     const preRaiser = (() => { const r = v.log.filter((e) => e.street === "preflop" && e.type === "raise"); return r.length ? r[r.length - 1].seat : -1; })();
     if (L.toCall === 0) {
       if (eq >= (n === 1 ? 0.52 : Math.max(0.5, fair + 0.22))) return [raise(), "Value bet"];
@@ -338,7 +433,7 @@
     return { label, action: a, eq: r.eq, potOdds: r.potOdds, why: r.why };
   }
 
-  const api = { decide, hint, rangeEquity, readRanges, pctOf, LEVELS, PCT };
+  const api = { decide, hint, rangeEquity, readRanges, pctOf, pctHand, LEVELS, PCT };
   if (isNode) module.exports = api;
   else root.Bots = api;
 })(typeof self !== "undefined" ? self : this);

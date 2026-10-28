@@ -90,6 +90,7 @@
     lost: ["Chips lost", "How many chips the choice gave up on average compared with the best option, using what you could have known at the time. Luck isn't counted."],
     luck: ["Luck meter", "When you're all in before the last card, the deck decides. Expected = your win chance × the pot at that moment; Actual = what you won. Above zero means the cards ran good for you."],
     strength: ["How strong?", ""],
+    format: ["Cash or tournament", ""],
     settle: ["Settle up", "Chips are worth the money put in: each chip = total buy-ins ÷ total chips. The list pays everyone off in as few transfers as possible."],
     icm: ["Fair deal (ICM)", "Splits the prize money by each player's chance of finishing in each place, worked out from chip counts. It's the standard way to agree a deal at a final table."],
     chart: ["Starting hands", "Each square is a two-card starting hand. Colour = how often it wins against that many random hands. Top-right half is suited, bottom-left is off-suit, the diagonal is pairs."],

@@ -63,7 +63,7 @@
       out.deal0 = 560;
       next.seats.forEach((p, k) => p.hole.forEach((_, j) => snd("cardDeal", out.deal0 + (j * n + k) * 45)));
       const dealt = next.seats.filter((p) => p.hole.length).length;
-      t = out.deal0 + (2 * n) * 45 + 300;
+      t = out.deal0 + (Math.max(2, ...next.seats.map((p) => p.hole.length)) * n) * 45 + 300;
       void dealt;
       // actions already made (an online snapshot can skip ahead); not after a reload/lobby
       entries = fresh ? [] : next.log.filter((e) => !["sb", "bb", "ante"].includes(e.type));
@@ -91,6 +91,7 @@
         const ty = e.type;
         if (ty === "fold") { snd("cardSlide", t); anim("fold", t, { seat: e.seat }); }
         else if (ty === "check") { snd("knock", t); anim("knock", t, { seat: e.seat }); }
+        else if (ty === "discard") snd("cardSlide", t, { vol: 0.6 }); // Pineapple: a card thrown away face down
         else if (ty === "call" || ty === "bet" || ty === "raise" || ty === "sb" || ty === "bb" || ty === "ante") {
           const big = ty !== "call" || e.amount >= 4 * bb;
           snd(e.allIn ? "chips" : big ? "chips" : "chip", t, e.allIn ? { vol: 1.3 } : undefined);

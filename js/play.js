@@ -28,6 +28,16 @@
   const TAP_GUARD_MS = 350;
   let replay = null;          // { states, i }: stepping through the last hand on the table (all cards face up)
   const ACTS = new Set(["fold", "check", "call", "bet", "raise"]);
+  /** Game types (engine cfg.game): [key, name, short name for the header, one line]. Hold'em is the default. */
+  const GAMES = [
+    ["holdem", "Texas Hold'em", "", "Two cards each. The classic."],
+    ["short", "Short deck", "Short deck", "36 cards, no 2–5. A flush beats a full house; A-6-7-8-9 is a straight."],
+    ["pineapple", "Pineapple", "Pineapple", "Three cards each; throw one away before the flop."],
+    ["crazy", "Crazy Pineapple", "Crazy P.", "Three cards each; throw one away after the betting on the flop."],
+    ["omaha", "Omaha", "Omaha", "Four cards each; use exactly two of them and three from the board. Usually pot limit."],
+  ];
+  const gameInfo = (k) => GAMES.find((g) => g[0] === (k || "holdem")) || GAMES[0];
+  const gameOf = (s) => (s && s.cfg && s.cfg.game) || "holdem";
 
   function init(container) {
     el = container;
@@ -65,20 +75,25 @@
     const st = UI.Store.data.setup;
     const lv = (k, name, note) => `<button data-lvl="${k}" class="${st.level === k ? "on" : ""}">${name}<small>${note}</small></button>`;
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, t]) => `<button data-set="${key}" data-v="${v}" class="${String(st[key]) === String(v) ? "on" : ""}">${t}</button>`).join("")}</div>`;
+    const gi = gameInfo(st.game);
     el.innerHTML = `<div class="setup scroll">
       <div class="setup-head"><h2>New table</h2>${root.Profile ? `<button class="btn small ghost pf-open" data-mystats>${root.Profile.avatarSVG(root.Profile.avatar, 24)}<span>My stats</span></button>` : ""}</div>
-      <div class="field"><span class="label">Computers</span><div class="stepper"><button data-opps="-1" aria-label="Fewer">−</button><b>${st.opponents}</b><button data-opps="1" aria-label="More">+</button></div></div>
-      <div><div class="label" style="margin-bottom:6px">Strength ${qm("strength")}</div>
+      <div class="field f-comp"><span class="label">Computers</span><div class="stepper"><button data-opps="-1" aria-label="Fewer">−</button><b>${st.opponents}</b><button data-opps="1" aria-label="More">+</button></div></div>
+      <div class="f-str"><div class="label" style="margin-bottom:6px">Strength ${qm("strength")}</div>
         <div class="lvl-grid">${lv("easy", "Easy", "loose")}${lv("medium", "Medium", "solid")}${lv("hard", "Hard", "reads you")}${lv("mixed", "Mixed", "a bit of each")}</div></div>
-      <div class="field"><span class="label">Betting</span>${seg("betting", [["nl", "No limit"], ["pl", "Pot limit"], ["fl", "Limit"]])}</div>
-      <div class="field"><span class="label">Game</span>${seg("format", [["cash", "Cash"], ["tourney", "Tournament"]])}</div>
-      <div class="field"><span class="label">Chips</span>${seg("stack", [[50, "50 BB"], [100, "100 BB"], [200, "200 BB"]])}</div>
-      <div class="field"><span class="label">Antes</span>${seg("ante", [["none", "None"], ["each", "Everyone"], ["bb", "Big blind"]])}</div>
-      <p class="muted" style="margin:0;font-size:13px">${st.format === "tourney" ? "Blinds go up every 10 hands. Last player with chips wins." : "Blinds stay 10/20. Out of chips? Buy back in."}</p>
-      <button class="btn primary" data-start style="min-height:52px;font-size:17px">Deal me in</button>
+      <div class="field f-type"><span class="label">Type</span><button class="type-pick" data-gametype aria-haspopup="dialog">${esc(gi[1])}<i aria-hidden="true">▾</i></button></div>
+      <div class="field f-bet"><span class="label">Betting</span>${seg("betting", [["nl", "No limit"], ["pl", "Pot limit"], ["fl", "Limit"]])}</div>
+      <div class="field f-game"><span class="label">Game ${qm("format")}</span>${seg("format", [["cash", "Cash"], ["tourney", "Tournament"]])}</div>
+      <div class="field f-chips"><span class="label">Chips</span>${seg("stack", [[50, "50 BB"], [100, "100 BB"], [200, "200 BB"]])}</div>
+      <div class="field f-ante"><span class="label">Antes</span>${seg("ante", [["none", "None"], ["each", "Everyone"], ["bb", "Big blind"]])}</div>
+      <p class="muted setup-note" style="margin:0;font-size:13px">${formatNote(st)}</p>
+      <button class="btn primary setup-start" data-start>Deal me in</button>
       <div class="setup-more">${root.OnlinePlay ? `<button class="btn" data-online>Play with friends</button>` : ""}${root.Profile ? `<button class="btn" data-daily>Daily game</button>` : ""}</div>
     </div>`;
   }
+
+  const blindHands = () => UI.Store.data.settings.blindHands || 10;
+  const formatNote = (st) => (st.format === "tourney" ? `Blinds go up every ${blindHands()} hands. Last player with chips wins.` : "Blinds stay 10/20. Out of chips? Buy back in.");
 
   /** A new local table. o (optional): { levels, seed, betting, format, stack, ante, tutorial, daily } — else the setup screen's choices. */
   function startGame(o) {
@@ -100,9 +115,9 @@
       players.slice(1).forEach((p, i) => { p.level = ls[i]; });
     }
     const cfg = {
-      betting: st.betting, format: st.format, sb: 10, bb: 20, startStack: 20 * st.stack, seed,
+      game: gameInfo(st.game)[0], betting: st.betting, format: st.format, sb: 10, bb: 20, startStack: 20 * st.stack, seed,
       ante: st.ante === "none" ? 0 : st.ante === "bb" ? 20 : 2, anteType: st.ante === "bb" ? "bb" : "each",
-      levelHands: 10, anteFromLevel: st.ante === "none" ? 99 : 1,
+      levelHands: st.levelHands || blindHands(), anteFromLevel: st.ante === "none" ? 99 : 1,
     };
     G = { state: E.newGame(cfg, players), decisions: [], startStacks: [], handLog: null, done: false, hands: 0, bigPot: 0, best: 0, helped: !!st.tutorial, tutorial: !!st.tutorial, daily: st.daily || null };
     seen = new Set();
@@ -137,7 +152,7 @@
   }
 
   // ================================================================ undo + replay (rebuilt from G.pre: the engine is pure)
-  const toAction = (e) => (e.type === "bet" || e.type === "raise" ? { type: "raise", to: e.to } : { type: e.type });
+  const toAction = (e, full) => (e.type === "bet" || e.type === "raise" ? { type: "raise", to: e.to } : e.type === "discard" ? { type: "discard", card: full.seats[e.seat].discards[0] } : { type: e.type });
   /** Every state of the current hand, from the deal to `upTo` log entries (all of them if omitted). */
   function rebuildHand(upTo) {
     const full = G.state;
@@ -147,8 +162,8 @@
     let guard = 0;
     while (s.log.length < end && guard++ < 500) {
       const e = full.log[s.log.length];
-      if (!e || !ACTS.has(e.type) || e.seat !== s.toAct) break;
-      s = E.apply(s, toAction(e));
+      if (!e || !(ACTS.has(e.type) || e.type === "discard") || e.seat !== s.toAct) break;
+      s = E.apply(s, toAction(e, full));
       out.push(s);
     }
     return out;
@@ -224,7 +239,7 @@
     if (!e) return "";
     const who = s.seats[e.seat].name, you = e.seat === 0 && who === "You";
     const v = (w) => (you ? w : w === "raise" ? "raises" : w + "s");
-    let t = `${esc(who)} ${e.type === "raise" ? `${v("raise")} to ${fmt(e.to)}` : e.type === "bet" ? `${v("bet")} ${fmt(e.to)}` : e.type === "call" ? `${v("call")} ${fmt(e.amount)}` : v(e.type)}`;
+    let t = `${esc(who)} ${e.type === "discard" ? v("discard") : e.type === "raise" ? `${v("raise")} to ${fmt(e.to)}` : e.type === "bet" ? `${v("bet")} ${fmt(e.to)}` : e.type === "call" ? `${v("call")} ${fmt(e.amount)}` : v(e.type)}`;
     if (s.street === "done" && s.result) t += " · " + (resNow || "");
     return t;
   }
@@ -275,6 +290,7 @@
     const opp = s.seats.filter((p) => p.i !== 0 && !p.folded).length;
     let next;
     try { next = E.apply(s, a); } catch (e) { UI.toast(e.message); fxError(); return; }
+    if (a.type === "discard") { setState(next); return; }
     G.decisions.push({
       street: s.street, board: s.board.slice(), hole: s.seats[0].hole.slice(), pot: L.pot, toCall: L.toCall,
       callAmount: L.callAmount, currentBet: s.currentBet, bet: L.bet, stack: L.stack, opp,
@@ -292,7 +308,7 @@
     const s = S();
     G.recorded = true;
     const rec = {
-      id: s.cfg.seed + "-" + s.hand, t: Date.now(), hand: s.hand, betting: s.cfg.betting, format: s.cfg.format,
+      id: s.cfg.seed + "-" + s.hand, t: Date.now(), hand: s.hand, game: gameOf(s), betting: s.cfg.betting, format: s.cfg.format,
       sb: s.sb, bb: s.bb, ante: s.ante, button: s.button,
       seats: s.seats.map((p) => ({ name: p.name, level: p.level, kind: p.kind, hole: p.hole, start: G.startStacks[p.i], end: p.stack, folded: p.folded, dealt: p.hole.length > 0 })),
       board: s.board.slice(), log: s.log, result: s.result, decisions: G.decisions,
@@ -313,7 +329,7 @@
     const mine = wonBy(s, 0);
     if (mine > 0) {
       G.bigPot = Math.max(G.bigPot || 0, Math.round(mine / s.bb));
-      if (!s.result.byFold && s.result.scores[0] !== undefined) G.best = Math.max(G.best || 0, P.category(s.result.scores[0]));
+      if (!s.result.byFold && s.result.scores[0] !== undefined) G.best = Math.max(G.best || 0, P.stdCategory(s.result.scores[0], gameOf(s)));
     }
     save();
   }
@@ -371,7 +387,7 @@
       if (!pot.eligible.includes(0)) continue;
       if (pot.eligible.length === 1) { expected += pot.amount; continue; }
       const hands = pot.eligible.map((i) => s.seats[i].hole);
-      const eqs = P.allEquities(hands, boardAt, [], { trials: 15000, exactLimit: 400000 });
+      const eqs = P.allEquitiesFor(gameOf(s), hands, boardAt, [], { trials: 15000, exactLimit: 400000 });
       expected += eqs[pot.eligible.indexOf(0)] * pot.amount;
     }
     const actual = s.result.net[0] + s.seats[0].total;
@@ -448,7 +464,7 @@
       else if (s.street === "done" && resShown.has(p.i) && s.result.names[p.i]) tag = `<span class="tag sd"${reveal}>${esc(short(s.result.names[p.i]))}</span>`;
       else if (p.allIn && !p.folded) tag = `<span class="tag">All in</span>`;
       else { const last = lastAction(s, p.i); if (last) tag = `<span class="tag">${last}</span>`; }
-      const cls = ["seat", hero ? "hero" : "", !hero && x > 60 ? "rt" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
+      const cls = ["seat", hero ? "hero" : "", p.hole.length > 2 ? "h" + p.hole.length : "", !hero && x > 60 ? "rt" : "", s.toAct === p.i ? "turn" : "", p.folded && p.hole.length ? "folded" : "", p.out || (!p.hole.length && s.street !== "idle") ? "out" : ""].join(" ");
       // your chips: a real stack beside your cards (the number stays on the plate)
       const shownStack = p.out ? 0 : p.stack - (counting[p.i] || 0);
       // (a phone with 7+ players has no room for everyone's stack: the number on the plate stays)
@@ -471,7 +487,7 @@
         else if (!wide && showCards && y < 47) sy += 4;
         const rot = showCards ? Math.max(-10, Math.min(10, Math.round(-(x - 50) / 4))) : theta;
         const side = Math.abs(x - 50) < 1 ? "c" : x < 50 ? "l" : "r";
-        html += `<div class="spot ${side}${p.folded ? " folded" : ""}" data-seat="${p.i}" style="left:${sx}%;top:${sy}%">
+        html += `<div class="spot ${side}${p.folded ? " folded" : ""}${p.hole.length > 2 ? " h" + p.hole.length : ""}" data-seat="${p.i}" style="left:${sx}%;top:${sy}%">
           ${myStack ? `<div class="stk">${myStack}</div>` : ""}<div class="hole${showCards ? " up" : ""}" data-rot="${rot}" style="rotate:${rot}deg">${cards}</div></div>`;
       }
       if (p.bet > 0) {
@@ -495,8 +511,10 @@
     // the dealer's spot: the deck (thickness = cards left) and the muck (folded hands + burn cards)
     const dealt = s.seats.reduce((a, p) => a + p.hole.length, 0);
     const burns = s.board.length >= 3 ? s.board.length - 2 : 0;
-    const deckLeft = s.street === "idle" ? 52 : Math.max(0, 52 - dealt - burns - s.board.length);
-    const mucked = burns + s.seats.reduce((a, p) => a + (p.i !== 0 && p.folded && !foldingNow.has(p.i) ? p.hole.length : 0), 0);
+    const discarded = s.seats.reduce((a, p) => a + (p.discards ? p.discards.length : 0), 0);
+    const deckSize = gameOf(s) === "short" ? 36 : 52;
+    const deckLeft = s.street === "idle" ? deckSize : Math.max(0, deckSize - dealt - discarded - burns - s.board.length);
+    const mucked = burns + discarded + s.seats.reduce((a, p) => a + (p.i !== 0 && p.folded && !foldingNow.has(p.i) ? p.hole.length : 0), 0);
     const muck = muckHTML(mucked, `${s.cfg.seed}-${s.hand}`);
     const board = [];
     for (let i = 0; i < 5; i++) {
@@ -768,7 +786,7 @@
       const e = s.log[k];
       if (e.seat === -1) return "";
       if (e.seat !== i) continue;
-      return { fold: "Fold", check: "Check", call: "Call", bet: "Bet", raise: "Raise", sb: "", bb: "", ante: "" }[e.type] || "";
+      return { fold: "Fold", check: "Check", call: "Call", bet: "Bet", raise: "Raise", discard: "Discard", sb: "", bb: "", ante: "" }[e.type] || "";
     }
     return "";
   }
@@ -797,9 +815,24 @@
     const live = s.seats.filter((p) => p.i !== 0 && !p.folded).length;
     const key = `${s.cfg.seed}-${s.hand}-${s.board.length}-${live}`;
     if (eqCache.key === key) return eqCache.r;
-    const r = P.equity({ hero: me.hole, board: s.board, opponents: live, trials: 5000, exactLimit: 250000, seed: s.hand + 1 });
+    const g = gameOf(s);
+    const r = P.equityFor(g, { hero: me.hole, board: s.board, opponents: live, trials: g === "holdem" ? 5000 : me.hole.length > 3 ? 1500 : 3000, exactLimit: 250000, seed: s.hand + 1 });
     eqCache = { key, r };
     return r;
+  }
+
+  /** Your hand in words: the made hand once there's a flop, else the starting hand ("AKs").
+   *  Three cards before the discard: the best hand you can keep. */
+  function handName(s, hole) {
+    const g = gameOf(s);
+    if (!hole.length || hole.includes(null)) return "";
+    if (s.board.length >= 3) {
+      let best = 0;
+      if (hole.length === 3) for (let k = 0; k < 3; k++) best = Math.max(best, P.score(g, hole.filter((c, j) => j !== k), s.board));
+      else best = P.score(g, hole, s.board);
+      return P.describeFor(best, g);
+    }
+    return hole.length === 2 ? P.handClass(hole[0], hole[1]) : "";
   }
 
   let resNow = "";
@@ -810,7 +843,7 @@
     const me = s.seats[0];
     const L = s.toAct === 0 ? E.legal(s) : null;
     const need = L && L.toCall > 0 ? L.callAmount / (L.pot + L.callAmount) : null;
-    const name = me.hole.length && s.board.length >= 3 ? P.describe(P.evaluate(me.hole, 2, s.board, s.board.length)) : me.hole.length ? P.handClass(me.hole[0], me.hole[1]) : "";
+    const name = handName(s, me.hole);
     let html = "";
     if (replay) {
       hud.innerHTML = `<span class="hname rp-line">${replayLine()}</span>`;
@@ -832,13 +865,13 @@
       // phone on its side: the table has no room under the board, so who won goes here (CSS shows it only there)
       html = (resNow ? `<div class="hud-res">${resNow}</div>` : "") + `<span class="hname">This hand: <b class="${net > 0 ? "good" : net < 0 ? "bad" : ""}">${net > 0 ? "+" : ""}${fmt(net)}</b></span><span class="spacer"></span><span class="muted">Session ${fmtSigned(s.seats[0].stack - s.cfg.startStack * s.seats[0].buyIns - (s.seats[0].topup || 0))}</span>`;
     } else html = `<span class="hname">${me.folded ? "You folded" : esc(name)}</span>`;
-    if (set.hints && s.toAct === 0 && !hintText) html += `<button class="btn small" data-hint>Hint</button>`;
+    if (set.hints && s.toAct === 0 && !hintText && !s.discard) html += `<button class="btn small" data-hint>Hint</button>`;
     if (set.undo !== false && undoIndex() >= 0) html += `<button class="btn small" data-undo>Undo</button>`;
     hud.innerHTML = html;
     const side = el.querySelector("#sideOdds");
     if (side) {
       const r = me.hole.length && !me.folded && s.street !== "done" ? heroEquity(s) : null;
-      const o = me.hole.length && (s.board.length === 3 || s.board.length === 4) && !me.folded && s.street !== "done" ? P.outs(me.hole, s.board) : null;
+      const o = gameOf(s) === "holdem" && me.hole.length === 2 && (s.board.length === 3 || s.board.length === 4) && !me.folded && s.street !== "done" ? P.outs(me.hole, s.board) : null;
       side.innerHTML = r ? `<div class="bignum" style="font-size:44px;color:${scale(r.equity, 0.1, 0.7)}">${(r.equity * 100).toFixed(1)}<small>% win</small></div>
         <div class="subnums"><span>Tie <b>${pct(r.tie)}</b></span>${need !== null ? `<span>Need <b>${pct(need, 0)}</b></span>` : ""}<span><b>${esc(name)}</b></span></div>
         ${o && o.cards.length ? `<div class="outs-line" style="margin-top:6px">Outs <b>${o.cards.length}</b> · ${Object.entries(o.byKind).map(([k, v]) => esc(k) + " " + v.length).join(" · ")}</div>` : ""}
@@ -871,7 +904,13 @@
     const mine = s.toAct === 0;
     const L = mine ? E.legal(s) : null;
     const dis = mine ? "" : "disabled";
-    let sizer = `<span class="muted" style="font-size:13px">${mine ? "" : s.seats[0].folded ? "Waiting for the hand to finish…" : "Waiting…"}</span>`;
+    if (L && L.discard) {
+      // Pineapple: throw one of your three cards away (face down)
+      box.innerHTML = `<div class="sizer"><span class="wait"><b>Discard one</b> <span class="muted">· keep the best two</span></span></div><div class="act-row">
+        ${L.cards.map((c) => `<button class="btn discard" data-discard="${c}">${UI.cardText(c)}</button>`).join("")}</div>`;
+      return;
+    }
+    let sizer = mine ? "" : waitingLine(s);
     // a fresh decision gets a fresh default size (never carry the last one over)
     const decKey = `${s.cfg.seed}-${s.hand}-${s.log.length}`;
     if (mine && decKey !== sizerKey) { sizerKey = decKey; sizerTo = 0; actReadyAt = Date.now() + TAP_GUARD_MS; }
@@ -892,6 +931,19 @@
       <button class="btn primary" data-act="raise" ${mine && L.canRaise ? "" : "disabled"} id="raiseBtn">${raiseLbl}</button></div>`;
   }
 
+  /** Not your turn: who's acting, the pot, and what calling would cost you right now (same height, so nothing jumps). */
+  function waitingLine(s) {
+    const me = s.seats[0], p = s.toAct >= 0 ? s.seats[s.toAct] : null;
+    const pot = E.potTotal(s);
+    const who = p ? `<span class="who"><i style="--lv:${LEVEL_COLOR[p.kind === "human" ? "human" : p.level] || "#999"}"></i><b>${esc(p.name)}</b> ${s.discard ? "discarding" : "to act"}</span>` : "";
+    let price = "";
+    if (!me.folded && !me.allIn && me.hole.length) {
+      const toCall = Math.min(Math.max(0, s.currentBet - me.bet), me.stack);
+      price = toCall > 0 ? `<span>Call <b>${fmt(toCall)}</b> · need <b>${pct(toCall / (pot + toCall), 0)}</b></span>` : `<span class="muted">Free to check</span>`;
+    }
+    return `<span class="wait">${me.folded ? `<span class="muted">Folded ·</span>` : ""}${who}<span class="spacer"></span><span>Pot <b>${fmt(pot)}</b></span>${price ? `<span class="sep">·</span>${price}` : ""}</span>`;
+  }
+
   function defaultSize(s, L) {
     if (s.cfg.betting === "fl") return L.minTo;
     const t = s.currentBet === 0 ? Math.round(L.pot * 0.66) : s.street === "preflop" && s.currentBet === s.bb ? s.bb * 3 : s.currentBet * 3;
@@ -905,7 +957,8 @@
     if (!G || !G.state) { t.innerHTML = ""; return; }
     const s = S();
     const fmtName = { nl: "No limit", pl: "Pot limit", fl: "Limit" }[s.cfg.betting];
-    t.innerHTML = `<span class="ti">${G.online && root.OnlinePlay.snap ? `<b class="ocode-top">${esc(root.OnlinePlay.snap.code || "")}</b> · ` : ""}${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""}</span> <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
+    const gName = gameInfo(gameOf(s))[2];
+    t.innerHTML = `<span class="ti">${G.online && root.OnlinePlay.snap ? `<b class="ocode-top">${esc(root.OnlinePlay.snap.code || "")}</b> · ` : ""}${gName ? esc(gName) + " · " : ""}${fmtName} · ${s.sb}/${s.bb}${s.ante ? " +" + s.ante : ""}${s.cfg.format === "tourney" ? " · Lv " + (s.level + 1) : ""}</span> <button class="btn small ghost" data-menu style="margin-left:6px;min-height:30px">Menu</button>`;
   }
 
   // ================================================================ events
@@ -919,6 +972,8 @@
     if (b.dataset.lvl) { st.level = b.dataset.lvl; UI.Store.save(); renderSetup(); return; }
     if (b.dataset.set) { const v = b.dataset.v; st[b.dataset.set] = isNaN(+v) ? v : +v; UI.Store.save(); renderSetup(); return; }
     if (b.dataset.start !== undefined) { startGame(); return; }
+    if (b.dataset.gametype !== undefined) { pickGame(); return; }
+    if (b.dataset.discard !== undefined) { if (Date.now() >= actReadyAt) heroAct({ type: "discard", card: +b.dataset.discard }); return; }
     if (b.dataset.daily !== undefined) { startDaily(); return; }
     if (b.dataset.mystats !== undefined) { root.Profile.openPanel(); return; }
     if (b.dataset.undo !== undefined) { undo(); return; }
@@ -978,6 +1033,25 @@
   }
 
   // ================================================================ sheets
+  /** Game type: one line each; Omaha switches the betting to pot limit (it can be changed back). */
+  function pickGame() {
+    const st = UI.Store.data.setup, cur = gameInfo(st.game)[0];
+    Sheet.open(`<h3>Game type</h3><div class="type-list">${GAMES.map(([k, n, , line]) => `<button class="type-opt${k === cur ? " on" : ""}" data-gt="${k}"><b>${esc(n)}</b><small>${esc(line)}</small></button>`).join("")}</div>
+      <p class="muted" style="font-size:13px;margin:8px 0 0">Online tables always play Texas Hold'em.</p>
+      <div class="row"><button class="btn ghost" data-close>Close</button></div>`, (body) => {
+      body.addEventListener("click", (e) => {
+        const o = e.target.closest("[data-gt]");
+        if (!o) return;
+        const k = o.dataset.gt;
+        if (k === "omaha" && st.game !== "omaha" && st.betting === "nl") st.betting = "pl";
+        st.game = k;
+        UI.Store.save();
+        Sheet.close();
+        renderSetup();
+      });
+    });
+  }
+
   function openMenu() {
     const s = G && G.state;
     if (G && G.online) {
@@ -1091,7 +1165,7 @@
     const d = HP.dailySetup(PR.daily.seed(day));
     root.App.go("play");
     clearTimeout(timer); gen++;
-    startGame(Object.assign(d, { daily: day }));
+    startGame(Object.assign({ game: "holdem", levelHands: 10 }, d, { daily: day }));
   }
   /** The guided first game: you and one Easy computer, a stacked first hand (js/coach-holdem.js). */
   function startTutorial() {
@@ -1101,10 +1175,10 @@
     Sheet.close();
     root.App.go("play");
     clearTimeout(timer); gen++;
-    startGame({ levels: ["easy"], seed: HC.SEED, betting: "nl", format: "cash", stack: 100, ante: "none", tutorial: true });
+    startGame({ levels: ["easy"], seed: HC.SEED, game: "holdem", levelHands: 10, betting: "nl", format: "cash", stack: 100, ante: "none", tutorial: true });
   }
 
-  root.PlayTab = {
+  root.PlayTab = { formatNote,
     init, render: () => { render(); }, newGame, setOnline, sync, startDaily, startTutorial,
     state: () => (G && !G.online && !replay ? G.state : null),
     isTutorial: () => { const g = G || UI.Store.data.game; return !!(g && g.tutorial && !g.online); },

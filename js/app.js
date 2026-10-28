@@ -21,6 +21,7 @@
       const s = root.STRENGTH_TEXT || "";
       return `<p>Measured, not guessed: the computers played long simulated sessions against each other (100 big blinds each, seats reshuffled, same cards replayed with seats swapped heads-up to cancel luck).</p>${s}`;
     },
+    format: () => `<p><b>Cash:</b> blinds stay 10/20. Out of chips? Buy back in.</p><p><b>Tournament:</b> blinds go up every ${UI.Store.data.settings.blindHands || 10} hands (Settings → Tournament blinds). Last player with chips wins.</p>`,
   };
   void STRENGTH;
 
@@ -54,6 +55,7 @@
       ${sw("undo", "Undo button", "Take back your last move against the computers")}
       ${sw("autoNext", "Deal the next hand automatically")}
       <div class="srow"><div class="t">Computer speed</div><div class="seg" style="width:210px">${["slow", "normal", "fast"].map((k) => `<button data-speed="${k}" class="${s.speed === k ? "on" : ""}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div></div>
+      <div class="srow"><div class="t">Tournament blinds<small>Hands between blind raises (new tables)</small></div><div class="seg" style="width:210px">${[[5, "5"], [10, "10"], [20, "20"]].map(([k, t]) => `<button data-blinds="${k}" class="${(s.blindHands || 10) === k ? "on" : ""}">${t}</button>`).join("")}</div></div>
       <div class="sgroup label">Cards</div>
       ${sw("fourColor", "Four-colour deck", "Clubs green, diamonds blue")}
       ${root.FX ? `<div class="sgroup label">Sound & effects</div><div data-fxbox></div>` : ""}
@@ -77,11 +79,12 @@
     applySettings();
   });
   document.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-tab], [data-speed], [data-clearhist], [data-confirmclear], [data-rules], [data-tutorial]");
+    const b = e.target.closest("[data-tab], [data-speed], [data-blinds], [data-clearhist], [data-confirmclear], [data-rules], [data-tutorial]");
     if (!b) return;
     if (b.dataset.rules !== undefined) openRules();
     else if (b.dataset.tutorial !== undefined) startTutorial();
     else if (b.dataset.tab) go(b.dataset.tab);
+    else if (b.dataset.blinds) { UI.Store.data.settings.blindHands = +b.dataset.blinds; UI.Store.save(); renderSettings(document.getElementById("view-settings")); }
     else if (b.dataset.speed) { UI.Store.data.settings.speed = b.dataset.speed; UI.Store.save(); renderSettings(document.getElementById("view-settings")); }
     else if (b.dataset.clearhist !== undefined) {
       UI.Sheet.open(`<h3>Clear hand history?</h3><p>Removes all ${UI.Store.data.history.length} saved hands from this device.</p><div class="row"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" data-close data-confirmclear>Clear</button></div>`);

@@ -3,6 +3,7 @@
  * Game: Tournament against one computer).
  *     node tools/sng.js [pairs] [betting] [a] [b] [stackBB]
  *       defaults: 500 pairs, nl, hard vs medium, 50 BB
+ *     GAME=short|pineapple|crazy|omaha node tools/sng.js ...   other game types (default Hold'em)
  * Each pair plays the same seed twice with the seats swapped (card luck
  * cancels). Blinds go up every 10 hands like the app. Reports the share of
  * tournaments a wins, with a 95% range.
@@ -16,16 +17,17 @@ const A = process.argv[4] || "hard";
 const Bl = process.argv[5] || "medium";
 const STACK = +process.argv[6] || 50;
 const SEED0 = +(process.env.SEED || 90000);
+const GAME = process.env.GAME || "holdem";
 
 function sng(levels, seed) {
   const players = levels.map((l, i) => ({ name: l + i, kind: "bot", level: l }));
-  let s = E.newGame({ seed, betting: BET, format: "tourney", sb: 10, bb: 20, startStack: 20 * STACK, levelHands: 10, ante: 0, anteFromLevel: 99 }, players);
+  let s = E.newGame({ seed, game: GAME, betting: BET, format: "tourney", sb: 10, bb: 20, startStack: 20 * STACK, levelHands: 10, ante: 0, anteFromLevel: 99 }, players);
   let guard = 0;
   while (!s.over && guard++ < 100000) {
     if (s.street === "done" || s.street === "idle") { s = E.apply(s, { type: "deal" }); continue; }
     const v = E.view(s, s.toAct);
     const d = B.decide(v, levels[s.toAct], P.rng32((s.cfg.seed + s.hand * 977 + s.log.length * 31) >>> 0));
-    try { s = E.apply(s, d.action); } catch (e) { s = E.apply(s, { type: E.legal(s).toCall ? "fold" : "check" }); }
+    try { s = E.apply(s, d.action); } catch (e) { const L = E.legal(s); s = E.apply(s, L.discard ? { type: "discard", card: s.seats[s.toAct].hole[0] } : { type: L.toCall ? "fold" : "check" }); }
   }
   return { winner: s.winner, hands: s.hand };
 }
@@ -37,4 +39,4 @@ for (let k = 0; k < N; k++) {
   hands += r1.hands + r2.hands;
 }
 const p = w / (2 * N), ci = 1.96 * Math.sqrt(p * (1 - p) / (2 * N));
-console.log(`${BET} heads-up tournaments, ${STACK} BB: ${A} beats ${Bl} ${(100 * p).toFixed(1)}% ±${(100 * ci).toFixed(1)} of ${2 * N} (avg ${(hands / 2 / N).toFixed(0)} hands, ${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+console.log(`${GAME} ${BET} heads-up tournaments, ${STACK} BB: ${A} beats ${Bl} ${(100 * p).toFixed(1)}% ±${(100 * ci).toFixed(1)} of ${2 * N} (avg ${(hands / 2 / N).toFixed(0)} hands, ${((Date.now() - t0) / 1000).toFixed(0)} s)`);

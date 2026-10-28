@@ -143,6 +143,151 @@
 
   const category = (score) => score >> 20;
 
+  // ------------------------------------------------------- other game types
+  /* Game types (engine cfg.game): "holdem" (default), "short" (6+ Hold'em, 36 cards), "pineapple" and
+     "crazy" (3 hole cards, one discarded), "omaha" (4 hole cards, exactly two used). */
+  // Short deck: the lowest straight is A-6-7-8-9 (nine high); 2-5 aren't in the deck.
+  const STRAIGHT_SD = new Int8Array(8192);
+  for (let m = 0; m < 8192; m++) {
+    let hi = -1;
+    for (let top = 12; top >= 4 && hi < 0; top--) {
+      const run = 0x1f << (top - 4);
+      if ((m & run) === run) hi = top;
+    }
+    if (hi < 0 && (m & 0x10f0) === 0x10f0) hi = 7; // A-6-7-8-9
+    STRAIGHT_SD[m] = hi;
+  }
+  /** Short-deck score: like evaluate, but a flush (category 6) beats a full house (category 5),
+   *  and A-6-7-8-9 is a straight. Straights still beat three of a kind. */
+  function evaluateShort(arr, n, arr2, n2) {
+    let s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+    const add = (c) => { const b = 1 << (c >> 2); switch (c & 3) { case 0: s0 |= b; break; case 1: s1 |= b; break; case 2: s2 |= b; break; default: s3 |= b; } };
+    if (n === undefined) n = arr.length;
+    for (let i = 0; i < n; i++) add(arr[i]);
+    if (arr2) { if (n2 === undefined) n2 = arr2.length; for (let i = 0; i < n2; i++) add(arr2[i]); }
+    const rankMask = s0 | s1 | s2 | s3;
+    let flush = 0;
+    if (POP[s0] >= 5) flush = s0; else if (POP[s1] >= 5) flush = s1;
+    else if (POP[s2] >= 5) flush = s2; else if (POP[s3] >= 5) flush = s3;
+    if (flush) { const sf = STRAIGHT_SD[flush]; if (sf >= 0) return (8 << 20) | (sf << 16); }
+    const quads = s0 & s1 & s2 & s3;
+    const three = (s0 & s1 & s2) | (s0 & s1 & s3) | (s0 & s2 & s3) | (s1 & s2 & s3);
+    const two = (s0 & s1) | (s0 & s2) | (s0 & s3) | (s1 & s2) | (s1 & s3) | (s2 & s3);
+    const trips = three & ~quads, pairs = two & ~three;
+    if (quads) { const q = HIGH[quads]; return (7 << 20) | (q << 16) | (HIGH[rankMask & ~(1 << q)] << 12); }
+    if (flush) return (6 << 20) | topKickers(flush, 5);
+    if (trips) {
+      const t = HIGH[trips];
+      const others = (trips & ~(1 << t)) | pairs;
+      if (others) return (5 << 20) | (t << 16) | (HIGH[others] << 12);
+    }
+    const st = STRAIGHT_SD[rankMask];
+    if (st >= 0) return (4 << 20) | (st << 16);
+    if (trips) { const t = HIGH[trips]; return (3 << 20) | (t << 16) | (topKickers(rankMask & ~(1 << t), 2) << 8); }
+    if (POP[pairs] >= 2) {
+      const p1 = HIGH[pairs], p2 = HIGH[pairs & ~(1 << p1)];
+      return (2 << 20) | (p1 << 16) | (p2 << 12) | (HIGH[rankMask & ~(1 << p1) & ~(1 << p2)] << 8);
+    }
+    if (pairs) { const p = HIGH[pairs]; return (1 << 20) | (p << 16) | (topKickers(rankMask & ~(1 << p), 3) << 4); }
+    return topKickers(rankMask, 5);
+  }
+
+  /** Omaha: the best hand using exactly two of the hole cards and exactly three board cards (board 3..5). */
+  const OM = [0, 0, 0, 0, 0];
+  function evaluateOmaha(hole, board) {
+    const h = hole.length, b = board.length;
+    if (b < 3) return 0;
+    let best = 0;
+    for (let i = 0; i < h; i++) for (let j = i + 1; j < h; j++) {
+      OM[0] = hole[i]; OM[1] = hole[j];
+      for (let x = 0; x < b; x++) for (let y = x + 1; y < b; y++) for (let z = y + 1; z < b; z++) {
+        OM[2] = board[x]; OM[3] = board[y]; OM[4] = board[z];
+        const s = evaluate(OM, 5);
+        if (s > best) best = s;
+      }
+    }
+    return best;
+  }
+
+  /** Score of a hand in any game type (bigger is better). Before the discard a Pineapple hand is scored
+   *  with all three cards (used only for odds before the discard). */
+  function score(game, hole, board) {
+    if (game === "omaha") return evaluateOmaha(hole, board);
+    if (game === "short") return evaluateShort(hole, hole.length, board, board.length);
+    return evaluate(hole, hole.length, board, board.length);
+  }
+  /** Category in plain Hold'em order (5 flush, 6 full house) for any game's score. */
+  function stdCategory(sc, game) {
+    const c = sc >> 20;
+    return game === "short" && (c === 5 || c === 6) ? 11 - c : c;
+  }
+  function describeFor(sc, game) {
+    if (game !== "short") return describe(sc);
+    const c = sc >> 20;
+    return describe(c === 5 || c === 6 ? ((11 - c) << 20) | (sc & 0xfffff) : sc);
+  }
+  /** The cards in play: 52, or 36 (six up to ace) for short deck. */
+  function deckFor(game) {
+    const out = [];
+    for (let c = game === "short" ? 16 : 0; c < 52; c++) out.push(c);
+    return out;
+  }
+  const HOLE = { holdem: 2, short: 2, pineapple: 3, crazy: 3, omaha: 4 };
+  const holeCount = (game) => HOLE[game] || 2;
+
+  /** Odds for any game type (Monte Carlo; plain Hold'em goes to the exact `equity`).
+   *  Unknown opponents hold as many cards as the hero. */
+  function equityFor(game, opts) {
+    if (!game || game === "holdem") return equity(opts);
+    const hero = opts.hero, board = opts.board || [];
+    const known = (opts.known || []).filter((h) => h && h.length);
+    const nOpp = Math.max(opts.opponents || 1, known.length);
+    const k = hero.length;
+    const taken = new Set(hero.concat(board, opts.dead || [], ...known));
+    const d = deckFor(game).filter((c) => !taken.has(c));
+    const rand = opts.rng || rng32(opts.seed || 12345);
+    const trials = opts.trials || 4000;
+    const need = 5 - board.length;
+    const full = board.slice();
+    const opps = known.slice();
+    for (let u = known.length; u < nOpp; u++) opps.push(new Array(k));
+    const draw = need + k * (nOpp - known.length);
+    const acc = { win: 0, tie: 0, lose: 0, share: 0 };
+    for (let t = 0; t < trials; t++) {
+      for (let i = 0; i < draw; i++) { const j = i + Math.floor(rand() * (d.length - i)); const x = d[i]; d[i] = d[j]; d[j] = x; }
+      let q = 0;
+      for (let i = board.length; i < 5; i++) full[i] = d[q++];
+      for (let u = known.length; u < nOpp; u++) for (let m = 0; m < k; m++) opps[u][m] = d[q++];
+      const h = score(game, hero, full);
+      let best = h, ties = 1, heroBest = true;
+      for (const o of opps) { const s = score(game, o, full); if (s > best) { best = s; heroBest = false; ties = 1; } else if (s === best) ties++; }
+      if (!heroBest || h !== best) acc.lose++;
+      else if (ties === 1) acc.win++;
+      else { acc.tie++; acc.share += 1 / ties; }
+    }
+    return finish(acc, false);
+  }
+  /** Every hand's share of the pot when all hands are known, any game type. */
+  function allEquitiesFor(game, hands, board, dead, opts) {
+    if (!game || game === "holdem") return allEquities(hands, board, dead, opts);
+    opts = opts || {};
+    const taken = new Set(board.concat(dead || [], ...hands));
+    const d = deckFor(game).filter((c) => !taken.has(c));
+    const need = 5 - board.length;
+    const shares = new Float64Array(hands.length);
+    const full = board.slice();
+    const rand = opts.rng || rng32(opts.seed || 777);
+    const trials = need === 0 ? 1 : Math.min(opts.trials || 6000, 6000);
+    const sc = new Array(hands.length);
+    for (let t = 0; t < trials; t++) {
+      for (let i = 0; i < need; i++) { const j = i + Math.floor(rand() * (d.length - i)); const x = d[i]; d[i] = d[j]; d[j] = x; full[board.length + i] = d[i]; }
+      let best = -1, ties = 0;
+      for (let i = 0; i < hands.length; i++) { sc[i] = score(game, hands[i], full); if (sc[i] > best) { best = sc[i]; ties = 1; } else if (sc[i] === best) ties++; }
+      for (let i = 0; i < hands.length; i++) if (sc[i] === best) shares[i] += 1 / ties;
+    }
+    return Array.from(shares, (s) => s / trials);
+  }
+
   /** Plain-English name of a score: "Two pair, Kings and Sevens". */
   function describe(score) {
     const cat = score >> 20;
@@ -416,6 +561,7 @@
     rankOf, suitOf, makeCard, parseCard, parseCards, cardStr,
     evaluate, category, describe, equity, allEquities, outs,
     rng32, choose, remainingDeck, CLASSES, CLASS_INDEX, handClass,
+    evaluateShort, evaluateOmaha, score, stdCategory, describeFor, deckFor, holeCount, equityFor, allEquitiesFor,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Poker = api;

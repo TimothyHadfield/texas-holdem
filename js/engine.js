@@ -15,6 +15,10 @@
  *   betting: "nl" no-limit | "pl" pot-limit | "fl" fixed-limit
  *   format:  "cash" (blinds fixed, rebuys) | "tourney" (blinds rise, last one standing)
  *   ante:    0 or an amount; anteType "each" (everyone) | "bb" (big blind pays one ante for the table)
+ *   game:    "holdem" (default) | "short" (6+: 36 cards, flush beats full house) | "pineapple" (3 cards,
+ *            discard one before the flop) | "crazy" (3 cards, discard one before the turn) | "omaha"
+ *            (4 cards, exactly two used). While s.discard is true each live player with 3 cards
+ *            throws one away ({ type: "discard", card }), starting left of the button.
  * Rules followed are listed with sources in docs/rules-check.md.
  * ==========================================================================*/
 (function (root) {
@@ -33,7 +37,7 @@
 
   function defaults(cfg) {
     return Object.assign({
-      betting: "nl", format: "cash", sb: 10, bb: 20, ante: 0, anteType: "each",
+      game: "holdem", betting: "nl", format: "cash", sb: 10, bb: 20, ante: 0, anteType: "each",
       startStack: 2000, levelHands: 10, anteFromLevel: 4, seed: 1,
     }, cfg || {});
   }
@@ -110,20 +114,20 @@
     const alive = s.seats.filter((p) => !p.out && p.stack > 0);
     if (alive.length < 2) illegal("Need at least two players with chips");
     for (const p of s.seats) {
-      p.hole = []; p.bet = 0; p.total = 0; p.allIn = false; p.acted = false; p.actedAt = -1;
+      p.hole = []; p.discards = []; p.bet = 0; p.total = 0; p.allIn = false; p.acted = false; p.actedAt = -1;
       p.folded = p.out || p.stack <= 0;
     }
     const inGame = (i) => !s.seats[i].folded;
     s.button = s.button < 0 ? nextSeat(s, (s.cfg.seed >>> 0) % n - 1 + n, inGame) : nextSeat(s, s.button, inGame);
     const B = blindsFor(s);
     s.sb = B.sb; s.bb = B.bb; s.ante = B.ante; s.level = B.level;
-    s.street = "preflop"; s.board = []; s.log = []; s.result = null;
+    s.street = "preflop"; s.board = []; s.log = []; s.result = null; s.discard = false;
     s.currentBet = 0; s.minRaise = s.bb; s.bets = 0; s.capped = false; s.lastAggressor = -1;
 
     // Shuffle a fresh deck from (seed, hand): replayable, same for every viewer.
     const rand = P.rng32((s.cfg.seed * 2654435761 + s.hand * 40503 + 17) >>> 0);
-    const deck = Array.from({ length: 52 }, (_, i) => i);
-    for (let i = 51; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+    const deck = P.deckFor(s.cfg.game);
+    for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
     s.deck = deck;
 
     const players = s.seats.filter((p) => !p.folded).length;
@@ -158,9 +162,9 @@
     s.minRaise = s.bb;
     s.bets = 1;
 
-    // Two cards each, one at a time, starting left of the button.
+    // Two cards each (three in Pineapple, four in Omaha), one at a time, starting left of the button.
     let k = 0;
-    for (let r = 0; r < 2; r++) {
+    for (let r = 0; r < P.holeCount(s.cfg.game); r++) {
       let i = s.button;
       for (let c = 0; c < players; c++) {
         i = nextSeat(s, i, inGame);
@@ -187,6 +191,7 @@
   function legal(s) {
     if (s.toAct < 0 || s.street === "idle" || s.street === "done") return null;
     const p = s.seats[s.toAct];
+    if (s.discard) return { seat: s.toAct, discard: true, cards: p.hole.slice(), toCall: 0, callAmount: 0, canCheck: false, canRaise: false, minTo: 0, maxTo: 0, isBet: false, pot: potTotal(s), stack: p.stack, bet: p.bet };
     const toCall = Math.max(0, s.currentBet - p.bet);
     const callAmt = Math.min(toCall, p.stack);
     const out = {
@@ -257,6 +262,18 @@
     if (a.seat !== undefined && a.seat !== s.toAct) illegal("Not your turn");
     const i = s.toAct, p = s.seats[i];
     let type = a.type;
+    if (s.discard || type === "discard") {
+      if (!s.discard) illegal("Nothing to discard now");
+      if (type !== "discard") illegal("Discard a card first");
+      const k = p.hole.indexOf(a.card);
+      if (k < 0) illegal("You don't hold that card");
+      p.hole.splice(k, 1);
+      p.discards.push(a.card);
+      logAct(s, i, "discard");
+      s.toAct = nextDiscarder(s, i);
+      if (s.toAct < 0) { s.discard = false; advance(s, true); }
+      return;
+    }
     if (type === "allin") {
       // "All in" = as much as the rules allow: the whole stack in no limit, capped
       // at the pot-limit / fixed-limit maximum otherwise.
@@ -309,11 +326,23 @@
     advance(s);
   }
 
+  /** Pineapple: discard after the betting before the flop; Crazy Pineapple: after the betting on the flop. */
+  const DISCARD_AT = { pineapple: "preflop", crazy: "flop" };
+  /** Next live player (from the left of seat `from`) who still holds three cards, or -1. */
+  function nextDiscarder(s, from) {
+    return nextSeat(s, from, (k) => !s.seats[k].folded && s.seats[k].hole.length > 2);
+  }
+
   /** Close the betting round and deal on until someone must act or the hand ends. */
-  function advance(s) {
+  function advance(s, discarded) {
     while (true) {
       for (const p of s.seats) { p.bet = 0; p.acted = false; p.actedAt = -1; }
       s.currentBet = 0; s.minRaise = s.bb; s.bets = 0; s.capped = false;
+      if (!discarded && DISCARD_AT[s.cfg.game] === s.street) {
+        const first = nextDiscarder(s, s.button);
+        if (first >= 0) { s.discard = true; s.toAct = first; return; }
+      }
+      discarded = false;
       if (s.street === "river") { showdown(s); return; }
       const next = STREETS[STREETS.indexOf(s.street) + 1];
       s.street = next;
@@ -363,8 +392,8 @@
     s.street = "showdown";
     const scores = {}, names = {};
     for (const p of s.seats) if (!p.folded) {
-      scores[p.i] = P.evaluate(p.hole, 2, s.board, 5);
-      names[p.i] = P.describe(scores[p.i]);
+      scores[p.i] = P.score(s.cfg.game, p.hole, s.board);
+      names[p.i] = P.describeFor(scores[p.i], s.cfg.game);
     }
     const pots = buildPots(s);
     const net = s.seats.map((p) => -p.total);
@@ -445,6 +474,7 @@
     const shown = new Set(s.result ? s.result.shown : []);
     for (const p of s.seats) {
       if (p.i !== seat && !shown.has(p.i)) p.hole = p.hole.map(() => null);
+      if (p.i !== seat && p.discards) p.discards = p.discards.map(() => null); // discards are face down
     }
     return s;
   }

@@ -49,3 +49,9 @@
 - **Built:** limit Hard (`hardLimit`), guided first game + Rules, My stats + achievements + Daily, Undo, Replay last hand, PWA. tools/sng.js + match.js for head-to-head.
 - **Verified:** `npm test` all green incl. new improve.test (620; seen failing with a broken replay mapping and a wrong tutorial seed); pwa-check 18/18 (4/18 on the old build); headless WebKit flow at 393 px (tutorial to the end, Undo, Replay, Rules, My stats; 0 errors, no overflow), shots at 320, 852x393 landscape and 1440 laptop. One reviewer sub-agent: Top up vs Undo/Replay, Undo restoring big pot/best hand, tutorial resume after reload fixed.
 - **Open:** NL/PL Hard 63–64% of heads-up tournaments (short of 65%); Tim's look calls in progress.md NOT verified.
+
+## 2026-10-28 — wave 3 (v1.6.0)
+- **Asked (Tim, via manager):** "Just make the games better" — iPhone layout leftovers, game types (short deck, Pineapple / Crazy Pineapple, Omaha), Videos in Rules, practical settings.
+- **Built:** evaluator + engine + bots for 4 game types (test-first: variants.test failed on the old build, `P.score` missing); setup Type picker; compact setup (Deal me in visible at 320x568 / 568x320); waiting band with who acts, pot, call price; Settings "Tournament blinds" 5/10/20; Rules "Game types" + "Videos" (5 links, each oembed 200 + matching title).
+- **Verified:** `npm test` all green (variants 64, improve 621); pwa-check 18/18; WebKit shots at 393x659, 320x568, 659x393, 568x320, 1280, 1440 for setup / waiting / Pineapple discard / Omaha / Rules: 0 errors, no overflow; Deal me in bottom vs tabs top 456<510 (320) and 276<280 (568x320), was 549>510 and scrolled. Ladders in progress.md. Live 124e023 re-checked at 393 and 320.
+- **Open:** Tim's look calls (progress.md NOT verified).

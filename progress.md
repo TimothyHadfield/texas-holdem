@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → `CLAUDE.md` → `docs/rules-check.md` → `docs/ideas.md` → `chat.md`.
-Last updated: 2026-10-27 (v1.5.1 follow-up: leaving a table early counts as a loss in My stats: a cash game under 10 hands or a tournament you're still in (`recordSession` → `quitRecord`, result `extra.quit`); 10+ hand cash sessions still count their real result; nothing counts before the first hand ends, and the guided game never counts (it used to after 10 hands). Toast "Game left early: counted as a loss" (wording not Tim's). `tests/quit.test.mjs` (WebKit 393, in `npm test`, seen failing on v1.5.0); build 11. Before that: improvement pass, v1.5.0).
+Last updated: 2026-10-28 (v1.6.0, wave 3, live at 124e023: game types Short deck / Pineapple / Crazy Pineapple / Omaha on a "Type" row of the setup (off by default; online stays Hold'em); setup fits 320x568 and 568x320 without scrolling; waiting band shows who acts + pot + call price; Settings "Tournament blinds" 5/10/20 hands; Rules → "Game types" + "Videos" (5 YouTube links, oembed-checked). Earlier, v1.5.1 follow-up: leaving a table early counts as a loss in My stats: a cash game under 10 hands or a tournament you're still in (`recordSession` → `quitRecord`, result `extra.quit`); 10+ hand cash sessions still count their real result; nothing counts before the first hand ends, and the guided game never counts (it used to after 10 hands). Toast "Game left early: counted as a loss" (wording not Tim's). `tests/quit.test.mjs` (WebKit 393, in `npm test`, seen failing on v1.5.0); build 11. Before that: improvement pass, v1.5.0).
 Live: https://timothyhadfield.github.io/texas-holdem/ · Repo: https://github.com/TimothyHadfield/texas-holdem
 
 ## Goal right now
@@ -23,6 +23,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 | Weird-scenario pass (2026-10-20, v1.4.1) | Done: 46 scenarios, 22 fixed (see "Edge pass" below). Live at b568145 |
 | Visibility pass (2026-10-27, v1.4.2) | Done: card indices ~30% bigger (opponents' showdown index 9.7 -> 12.4 px, phone board 13.4 -> 18.8 px), phone board 37 -> 41 px, sideways phone: slimmer bars + winner line in the column (felt 24% -> 29% of screen), weighted clear-spot search in keepOnScreen. Overlap failures 40 -> 8 of 66 shots. Shots + audit.mjs in the manager's scratchpad `vis/texas-holdem/` |
 | Improvement pass (2026-10-27, v1.5.0) | Done: guided first game (`js/coach-holdem.js`, seed 416 = you hold A-K) + Rules sheet (Settings → Learn, Menu → Rules); My stats / achievements / Daily game (`js/profile-holdem.js`; rated unless Hint/Undo used; cash counts at 10+ hands); Undo (HUD button, Settings switch) and Replay last hand (done row), both rebuilt from `G.pre`; offline/install kit (`js/pwa.js`, `sw.js`, manifest, icons; pwa-check 18/18); limit Hard rewritten (`hardLimit` in bots.js). improve.test 620 |
+| Wave 3 (2026-10-28, v1.6.0) | Done: `P.score/describeFor/stdCategory/deckFor/holeCount/equityFor` in poker.js (short deck: flush > full house, A-6-7-8-9 straight; Omaha exactly 2+3); engine `cfg.game`, Pineapple discard after preflop betting, Crazy after flop betting (discards hidden); bots game-aware (`chooseDiscard`, `omahaDraw`, Hard defends wider in Omaha). Ladder, heads-up tournaments: Hard>Medium short 56.3 / pineapple 64.0 / crazy 58.8 / omaha 56.5 %; Medium>Easy 67.5 / 69.3 / 71.5 / 64.5 %. variants.test 64 (in npm test). Hold'em deals and bot play unchanged |
 | Online seats ("Play with friends") | Done: `js/online.js` (unchanged copy of `../_online/online.js`), `js/online-game.js` (game object + seat rotation), `js/online-play.js` (start / lobby screens). online.test 36; two headless iPhones played 3 hands on the live site through real Firebase (gameId `holdem`) |
 
 ## Standing instructions (Tim's words)
@@ -65,6 +66,8 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 
 ## NOT verified
 - On a real iPhone (only WebKit at 393 px via phone-view).
+- Wave 3 look calls not Tim's: "Type" row + picker sheet wording, waiting-band text, discard buttons as card text, header short names ("Crazy P."), blinds 5/10/20, format note behind a ? on short screens, two-column sideways setup, Omaha auto-switching to pot limit, default-blue video links.
+- Game types: only bot-vs-bot ladders + fuzz (40 games each); Study/Replay/Undo of a discard hand checked by tests only, not by hand in a browser. Ladders are ±4.9 % (400 games).
 - Timer beep/vibrate on iOS (vibrate is not supported on iOS Safari; beep needs a tap first).
 - Online play with real people on two real phones (only two headless WebKit pages against the live site + real Firebase), host hand-over when the creator drops, and reload mid-game rejoin.
 - NL/PL Hard beats Medium in 63–64% of heads-up tournaments (target 65%; 88.7% over 100-hand matches). FL 100-hand matches only 58.7% (+9.9 ±9.2 bb/100). The app's strength text / measure.js ring numbers were not re-measured after `hardLimit`; online limit tables use the new Hard too.

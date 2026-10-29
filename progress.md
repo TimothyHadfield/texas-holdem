@@ -35,7 +35,7 @@ Odds calculator, practice table vs 1–8 computers with measured strength, study
 - Design: no page scroll; phone bottom tabs, laptop uses width; labels 1–3 words; "?" explains WHY; red→green for good/bad numbers. $0.
 
 ## Traps
-- **Kits re-copied 2026-10-27 (kitfix):** game-coach 1.1.0 (rules tabs wrap instead of scrolling sideways; a note beside a tall target keeps title + 2 lines + buttons) and game-pwa 1.3.0 (`data-extra` on the pwa.js tag caches files loaded later by script). Copies stay byte-identical to `../_coach` / `../_pwa`.
+- **Kits re-copied 2026-10-28 (wave 3 sweep):** game-coach 1.2.0 (first-visit offer `place:"auto"` + `avoid: [".setup-start"]`) and game-pwa 1.4.0; coach/app/pwa ?v=15, data-version 15 (other files still ?v=14). Copies stay byte-identical to `../_coach` / `../_pwa`.
 - **online.js cache stamp (2026-10-27):** every import of `js/online.js` uses `?v=a3d0418b`, the `_online` content stamp. After a re-copy: put the new stamp from `node ../_online/tools/stamp.mjs` there, bump the importing file's `?v=` (and pwa.js `data-version`), then `node ../_online/tools/stamp.mjs --check .` must say OK.
 - `fill:` in phone-view doesn't fire on number inputs; real typing works (checked by hand). Use `--eval` to set values.
 - Port 8231 may be used by other game builders; serve on 8477.

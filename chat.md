@@ -55,3 +55,6 @@
 - **Built:** evaluator + engine + bots for 4 game types (test-first: variants.test failed on the old build, `P.score` missing); setup Type picker; compact setup (Deal me in visible at 320x568 / 568x320); waiting band with who acts, pot, call price; Settings "Tournament blinds" 5/10/20; Rules "Game types" + "Videos" (5 links, each oembed 200 + matching title).
 - **Verified:** `npm test` all green (variants 64, improve 621); pwa-check 18/18; WebKit shots at 393x659, 320x568, 659x393, 568x320, 1280, 1440 for setup / waiting / Pineapple discard / Omaha / Rules: 0 errors, no overflow; Deal me in bottom vs tabs top 456<510 (320) and 276<280 (568x320), was 549>510 and scrolled. Ladders in progress.md. Live 124e023 re-checked at 393 and 320.
 - **Open:** Tim's look calls (progress.md NOT verified).
+
+## 2026-10-28 — wave 3 kit sweep (builder b3)
+- Kits game-coach 1.2.0 (offer `place:"auto"`, avoid `.setup-start`) + game-pwa 1.4.0; coach/app/pwa ?v=15, data-version 15. Verified: `npm test` green, pwa-check 18/18, offer clear of tab bar and Deal me in at 393x659/320x568/659x393 (WebKit, fresh storage), settings 320 sw=cw=320 (no inner box wider), selects already themed. Commit 0ea1202, live.

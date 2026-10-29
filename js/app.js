@@ -142,7 +142,7 @@
   function offerTutorial() {
     if (!tour || !root.COACH || UI.Store.data.tab !== "play" || UI.Store.data.game || tour.seen() || tour.saved() || root.COACH.offered(root.HoldemCoach.ID)) return;
     if (UI.Store.data.history.length) return; // played here before: not new
-    root.COACH.offer({ id: root.HoldemCoach.ID, title: "New to Hold'em?", text: "Play one guided hand against an Easy computer.", yes: "Teach me", no: "No thanks", onYes: startTutorial });
+    root.COACH.offer({ id: root.HoldemCoach.ID, title: "New to Hold'em?", text: "Play one guided hand against an Easy computer.", yes: "Teach me", no: "No thanks", onYes: startTutorial, place: "auto", avoid: [".setup-start"] });
   }
 
   root.App = { go, VERSION, openRules, startTutorial };

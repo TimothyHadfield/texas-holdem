@@ -253,7 +253,9 @@
       if (!G.recorded) recordHand();
       profileCheck();
       // tournament: you're out
-      if (s.cfg.format === "tourney" && s.seats[0].out && !G.toldOut) { G.toldOut = true; save(); setTimeout(() => my === gen && offerOut(), 900); }
+      // the last hand stays on the table a few seconds before the sheet: the ending is a moment, not a cut (2026-11-25)
+      const sp = UI.Store.data.settings.speed, outMs = sp === "fast" ? 2300 : sp === "slow" ? 6000 : 4500;
+      if (s.cfg.format === "tourney" && s.seats[0].out && !G.toldOut) { G.toldOut = true; save(); setTimeout(() => my === gen && offerOut(), outMs); }
       if (UI.Store.data.settings.autoNext && !s.over && s.seats[0].stack > 0) timer = setTimeout(() => { if (my === gen) dealNext(); }, 2600);
       return;
     }

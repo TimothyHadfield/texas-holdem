@@ -498,7 +498,7 @@
         if (wide && level) { bx = x + (50 - x) * 0.3; by = y + 10; }
         // phone, seats at the ends: the bet goes just above the plate, clear of the board and their cards
         if (!wide && level) { bx = x + (x < 50 ? 7 : -7); by = y - 10; }
-        html += `<div class="seatbet" data-seat="${p.i}" style="left:${bx}%;top:${by}%"><span class="bet">${chipStacks(p.bet, s.bb, 4, wide ? 3 : 2)}<span class="amt">${fmt(p.bet)}</span></span></div>`;
+        html += `<div class="seatbet" data-seat="${p.i}" style="left:${bx}%;top:${by}%"><span class="bet">${chipStacks(p.bet, s.bb, !wide && n >= 7 ? 2 : 4, wide ? 3 : 2)}<span class="amt">${fmt(p.bet)}</span></span></div>`;
       }
       if (p.i === s.button && !hero) {
         let dxp = 50 + (x - 50) * 0.62 + (Math.abs(x - 50) < 1 ? (wide ? 11 : 16) : x < 50 ? 5 : -5), dyp = 47 + (y - 47) * 0.62;
@@ -571,6 +571,11 @@
     if (!ta) return;
     const r = ta.getBoundingClientRect(), pad = 2;
     if (!r.width) return;
+    // measure where the cards will land, not where the deal animation has them now (it restarts at once, unseen)
+    ta.classList.add("measure");
+    try { placeAll(ta, r, pad); } finally { ta.classList.remove("measure"); }
+  }
+  function placeAll(ta, r, pad) {
     // an action tag that would sit on the board moves to the plate's outer corner
     const bd = el.querySelector(".table-area .board");
     if (bd) {
@@ -599,23 +604,24 @@
     const rects = (sel) => Array.from(el.querySelectorAll(sel)).map((e) => e.getBoundingClientRect()).filter((q) => q.width);
     // names, numbers, hand labels and the board count triple: covering them is worse than covering felt or chips
     const text = (list) => list.map((q) => Object.assign({ left: q.left, right: q.right, top: q.top, bottom: q.bottom }, { w: 3 }));
-    const fixed = [...text(rects(".table-area .plate")), ...text(rects(".table-area .seat .tag")), ...text(rects(".table-area .board")), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot"), ...rects(".table-area .deck"), ...rects(".table-area .muck"), ...rects(".table-area .seat.hero .dealer")];
+    const fixed = [...text(rects(".table-area .plate")), ...text(rects(".table-area .seat .tag")), ...text(rects(".table-area .board")), ...rects(".table-area .seat.hero .hole"), ...rects(".table-area .pot"), ...text(rects(".table-area .pot .amt")), ...rects(".table-area .deck"), ...rects(".table-area .muck"), ...rects(".table-area .seat.hero .dealer")];
     const res = el.querySelector(".table-area .result-line");
     if (res && res.textContent.trim() && res.offsetParent) { const rg = document.createRange(); rg.selectNodeContents(res); fixed.push(...text([rg.getBoundingClientRect()])); }
     const placed = [];
     // stay on the felt (its box, a little inside the rail)
     const f0 = el.querySelector(".table-area .felt").getBoundingClientRect();
     const fr = { left: f0.left + 2, right: f0.right - 2, top: f0.top + 2, bottom: f0.bottom - 2 };
+    const rectOf = (e) => { const q = e.getBoundingClientRect(); return { left: q.left, right: q.right, top: q.top, bottom: q.bottom }; };
     const union = (list) => list.reduce((u, q) => (u ? { left: Math.min(u.left, q.left), right: Math.max(u.right, q.right), top: Math.min(u.top, q.top), bottom: Math.max(u.bottom, q.bottom) } : q), null);
     const settle = (node, boxes) => {
-      const shift = (q, dx, dy) => ({ left: q.left + dx, right: q.right + dx, top: q.top + dy, bottom: q.bottom + dy });
+      const shift = (q, dx, dy) => ({ left: q.left + dx, right: q.right + dx, top: q.top + dy, bottom: q.bottom + dy, w: q.w });
       const area = (q, o) => (hit(q, o) ? (Math.min(q.right, o.right) - Math.max(q.left, o.left)) * (Math.min(q.bottom, o.bottom) - Math.max(q.top, o.top)) : 0);
       // what each part covers, plus anything hanging off the felt (counted double)
       const off = (q) => (Math.max(0, fr.left - q.left) + Math.max(0, q.right - fr.right)) * (q.bottom - q.top) + (Math.max(0, fr.top - q.top) + Math.max(0, q.bottom - fr.bottom)) * (q.right - q.left);
       // the felt is oval: a corner past its edge sits on the rail
       const ecx = (fr.left + fr.right) / 2, ecy = (fr.top + fr.bottom) / 2, erx = (fr.right - fr.left) / 2, ery = (fr.bottom - fr.top) / 2;
       const rail = (q) => [[q.left, q.top], [q.right, q.top], [q.left, q.bottom], [q.right, q.bottom]].filter(([x, y]) => ((x - ecx) / erx) ** 2 + ((y - ecy) / ery) ** 2 > 1).length;
-      const over = (dx, dy) => { let a = 0; for (const b of boxes) { const q = shift(b, dx, dy); for (const o of fixed) a += area(q, o) * (o.w || 1); for (const o of placed) a += 3 * area(q, o); a += 4 * off(q) + 400 * rail(q); } return a; };
+      const over = (dx, dy) => { let a = 0; for (const b of boxes) { const q = shift(b, dx, dy), bw = b.w || 1; for (const o of fixed) a += area(q, o) * (o.w || 1) * bw; for (const o of placed) a += 3 * area(q, o) * (o.w || 1) * bw; a += 4 * off(q) + 400 * rail(q); } return a; };
       const here = over(0, 0);
       if (!here) return boxes;
       // each pixel moved costs a little, so a small overlap never sends things far across the table
@@ -649,7 +655,9 @@
     });
     Array.from(el.querySelectorAll(".table-area .seatbet")).forEach((b) => {
       const chips = b.querySelector(".bet");
-      if (chips) placed.push(...settle(b, [chips.getBoundingClientRect()]));
+      // (its amount counts extra: a number half under a name or another bet is worse than chips on felt)
+      const amt = chips && chips.querySelector(".amt");
+      if (chips) placed.push(...settle(b, [rectOf(chips), ...(amt ? [Object.assign(rectOf(amt), { w: 4 })] : [])]));
     });
     // last, the dealer button finds a clear spot near its player
     // (only when it covers something: on a phone it rests on the rail by design)

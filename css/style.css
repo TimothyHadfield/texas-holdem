@@ -203,7 +203,7 @@ body { --back: #1f4e8c; }
 }
 /* a bet on the felt: the chips pushed out, with the amount beside them */
 .bet { display: inline-flex; align-items: flex-end; gap: 3px; white-space: nowrap; --chip-size: 14px; }
-.bet .amt, .pot .amt { font-size: 11px; font-weight: 800; color: #fff3d6; background: rgba(0,0,0,.38); padding: 0 5px; border-radius: 7px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.bet .amt, .pot .amt { font-size: 12.5px; font-weight: 800; color: #fff3d6; background: rgba(0,0,0,.38); padding: 0 5px; border-radius: 7px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .tbl-stacks { gap: 1px; }
 /* phone: chips over the amount, so neighbours' bets never overlap */
 @media (max-width: 899px) { .bet { flex-direction: column; align-items: center; gap: 1px; } }
@@ -267,12 +267,12 @@ body { --back: #1f4e8c; }
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), transparent 55%), var(--lv);
   box-shadow: inset 0 -2px 2px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.5);
 }
-.seat .nm { font-size: 11px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50px; }
-.seat .st { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--accent-warm); font-weight: 700; line-height: 1.1; }
+.seat .nm { font-size: 11px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 66px; }
+.seat .st { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--accent-warm); font-weight: 700; line-height: 1.1; }
 .seat.turn .plate { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(110,168,254,.25); }
 .seat.folded { opacity: .45; }
 .seat.out { opacity: .25; }
-.seat .tag { position: absolute; top: -16px; right: -6px; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); z-index: 3; white-space: nowrap; }
+.seat .tag { position: absolute; top: -17px; right: -6px; font-size: 10.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); z-index: 3; white-space: nowrap; }
 .seat .tag.win { background: var(--accent-warm); color: #231703; border-color: var(--accent-warm); }
 /* showdown tags sit under the plate so they never cover the cards just turned over */
 .seat:not(.hero) .tag.sd { top: auto; bottom: -15px; right: 50%; transform: translateX(50%); }
@@ -316,7 +316,7 @@ body { --back: #1f4e8c; }
 .actions { padding: 8px 10px 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; border-top: 1px solid var(--line); background: #12151d; }
 .sizer { display: flex; gap: 5px; align-items: center; height: 40px; min-width: 0; }
 .sizer .btn.small { padding: 6px 8px; min-width: 38px; min-height: 40px; }
-.sizer input[type=range] { flex: 1; min-width: 60px; height: 34px; -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
+.sizer input[type=range] { flex: 1; min-width: 60px; height: 40px; -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
 .sizer input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: #3a4258; }
 .sizer input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: #3a4258; }
 .sizer input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: var(--accent-warm); border: 3px solid #fff3dc; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
@@ -337,7 +337,7 @@ body { --back: #1f4e8c; }
   .side { display: flex; flex-direction: column; width: 340px; border-left: 1px solid var(--line); background: var(--bg-soft); min-height: 0; }
   .side h3 { margin: 0; padding: 12px 14px 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .seat { width: 124px; } .seat .plate { min-width: 118px; padding: 5px 10px 5px 5px; gap: 8px; }
-  .seat .av { width: 34px; height: 34px; font-size: 14px; } .seat .nm { font-size: 14px; max-width: 72px; } .seat .st { font-size: 15px; }
+  .seat .av { width: 34px; height: 34px; font-size: 14px; } .seat .nm { font-size: 14px; max-width: 96px; } .seat .st { font-size: 15px; }
   .spot .hole .cd { --w: 36px; } .spot .hole.up .cd { --w: 48px; }
   .stk { --chip-size: 20px; }
   .seat.hero .stk.mine { --chip-size: 22px; bottom: 64px; right: calc(100% + 4px); }
@@ -608,6 +608,8 @@ body { --back: #1f4e8c; }
 /* table effects: fade in what the runout would give away; Animations off / Fast */
 @keyframes fxin { from { opacity: 0; } }
 body.fx-noanim .cd.deal, body.fx-noanim .cd.dealflip, body.fx-noanim .cd.flip { animation: none; }
+/* (play.js keepOnScreen: for one measuring moment the cards sit where they will land) */
+.table-area.measure .cd { animation: none !important; }
 body.fx-noanim .cd::before { display: none; }
 body.fx-fast .cd.deal { animation-duration: .23s; }
 body.fx-fast .cd.dealflip { animation-duration: .39s; }
@@ -652,8 +654,9 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
   .seat { width: 74px; }
   .seat .plate { min-width: 70px; padding: 2px 5px 2px 2px; gap: 4px; }
   .seat .av { width: 20px; height: 20px; font-size: 10px; }
-  .seat .nm { font-size: 10.5px; max-width: 44px; }
-  .seat .st { font-size: 10.5px; }
+  .seat .nm { font-size: 10.5px; max-width: 58px; }
+  .spot .hole:not(.up) .cd { --w: 17px; }
+  .seat .st { font-size: 12px; }
   .seat.hero { width: 110px; }
   .center { --bw: 30px; }
 }
@@ -674,8 +677,8 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
   .play-main .actions-wrap { grid-column: 2; grid-row: 2; border-left: 1px solid var(--line); background: #12151d; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
   .actions { border-top: 0; padding: 6px 8px 8px; gap: 6px; }
   .sizer { flex-wrap: wrap; height: auto; min-height: 34px; gap: 4px; }
-  .sizer .btn.small { min-height: 32px; min-width: 0; flex: 1 1 20%; padding: 4px; }
-  .sizer input[type=range] { flex: 1 1 calc(100% - 70px); height: 28px; }
+  .sizer .btn.small { min-height: 36px; min-width: 0; flex: 1 1 20%; padding: 4px; }
+  .sizer input[type=range] { flex: 1 1 calc(100% - 70px); height: 36px; }
   .sizer .amt { min-width: 0; }
   .act-row { grid-template-columns: 1fr 1fr !important; gap: 6px; }
   .act-row #raiseBtn { grid-column: 1 / -1; }
@@ -693,4 +696,12 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 /* iPhone SE on its side: a slimmer column, so the table gets the width */
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 359px) {
   .play-main { grid-template-columns: minmax(0, 1fr) 208px; }
+}
+
+/* iPhone SE width: the raise presets give the slider and its amount room, and a long amount drops under its button label */
+@media (max-width: 359px) {
+  .sizer { gap: 4px; }
+  .sizer .btn.small { min-width: 36px; padding: 6px 4px; }
+  .sizer input[type=range] { min-width: 40px; }
+  .act-row .btn:has(small) { flex-direction: column; gap: 0; line-height: 1.15; }
 }

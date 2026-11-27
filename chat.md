@@ -58,3 +58,9 @@
 
 ## 2026-10-28 — wave 3 kit sweep (builder b3)
 - Kits game-coach 1.2.0 (offer `place:"auto"`, avoid `.setup-start`) + game-pwa 1.4.0; coach/app/pwa ?v=15, data-version 15. Verified: `npm test` green, pwa-check 18/18, offer clear of tab bar and Deal me in at 393x659/320x568/659x393 (WebKit, fresh storage), settings 320 sw=cw=320 (no inner box wider), selects already themed. Commit 0ea1202, live.
+
+## 2026-11-27 — fit pass (builder, v1.6.2)
+- **Asked (Tim, via manager):** every game: "making sure the user can actually see the full screen and everything"; numbers big enough, space used well as things pile up.
+- **Built:** CSS sizes (phone stacks/bets/pot >= 12 px, tags 10.5, names 7+ letters, laptop full names, slider and sideways presets >= 36 px, SE raise amount no longer cut) + play.js `keepOnScreen` (measures cards where they land, amounts weighted as text, shorter bet chips at a full phone table).
+- **Verified:** new `tests/fit-ui.mjs` (WebKit, 5 sizes, crowded 9-player river + 4-player preflop): 10 FAIL on v1.6.1, all pass now; `npm test` green; pwa-check 18/18. Shots in `C:/Users/timha/AppData/Local/Temp/claude/wt/texas-holdem-fit-shots/{before,after}`.
+- **Open:** showdown / Omaha / online not re-shot (progress.md NOT verified).
